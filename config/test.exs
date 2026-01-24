@@ -39,3 +39,8 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# Mocks
+config :social_scribe, :salesforce_api, SocialScribe.SalesforceApiMock
+config :social_scribe, :hubspot_api, SocialScribe.HubspotApiMock
+config :social_scribe, :ai_content_generator_api, SocialScribe.AIContentGeneratorApiMock
