@@ -4,12 +4,21 @@ defmodule SocialScribe.HubspotApi do
   Implements automatic token refresh on 401/expired token errors.
   """
 
-  @behaviour SocialScribe.HubspotApiBehaviour
+  @behaviour SocialScribe.CrmApiBehaviour
 
   alias SocialScribe.Accounts.UserCredential
   alias SocialScribe.HubspotTokenRefresher
 
   require Logger
+
+  @impl SocialScribe.CrmApiBehaviour
+  def display_properties do
+    %{
+      color: "bg-orange-500",
+      initial: "H",
+      label: "HubSpot"
+    }
+  end
 
   @base_url "https://api.hubapi.com"
 
@@ -48,6 +57,7 @@ defmodule SocialScribe.HubspotApi do
   Returns up to 10 matching contacts with basic properties.
   Automatically refreshes token on 401/expired errors and retries once.
   """
+  @impl SocialScribe.CrmApiBehaviour
   def search_contacts(%UserCredential{} = credential, query) when is_binary(query) do
     with_token_refresh(credential, fn cred ->
       body = %{
@@ -74,6 +84,7 @@ defmodule SocialScribe.HubspotApi do
   Gets a single contact by ID with all properties.
   Automatically refreshes token on 401/expired errors and retries once.
   """
+  @impl SocialScribe.CrmApiBehaviour
   def get_contact(%UserCredential{} = credential, contact_id) do
     with_token_refresh(credential, fn cred ->
       properties_param = Enum.join(@contact_properties, ",")
@@ -100,6 +111,7 @@ defmodule SocialScribe.HubspotApi do
   `updates` should be a map of property names to new values.
   Automatically refreshes token on 401/expired errors and retries once.
   """
+  @impl SocialScribe.CrmApiBehaviour
   def update_contact(%UserCredential{} = credential, contact_id, updates)
       when is_map(updates) do
     with_token_refresh(credential, fn cred ->
@@ -160,6 +172,7 @@ defmodule SocialScribe.HubspotApi do
       website: properties["website"],
       linkedin_url: properties["hs_linkedin_url"],
       twitter_handle: properties["twitterhandle"],
+      provider: "hubspot",
       display_name: format_display_name(properties)
     }
   end
@@ -224,8 +237,10 @@ defmodule SocialScribe.HubspotApi do
 
   defp is_token_error?(%{"status" => "BAD_CLIENT_ID"}), do: true
   defp is_token_error?(%{"status" => "UNAUTHORIZED"}), do: true
+
   defp is_token_error?(%{"message" => msg}) when is_binary(msg) do
     String.contains?(String.downcase(msg), ["token", "expired", "unauthorized", "client id"])
   end
+
   defp is_token_error?(_), do: false
 end
