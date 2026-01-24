@@ -138,6 +138,62 @@
 
   <div class="bg-white  shadow-xl rounded-lg p-6 md:p-8">
     <h2 class="text-2xl font-semibold mb-6 text-slate-700 ">
+      Connected Salesforce Accounts
+    </h2>
+
+    <%= if not Enum.empty?(@salesforce_accounts) do %>
+      <ul class="space-y-4 mb-8">
+        <li
+          :for={account <- @salesforce_accounts}
+          class="flex justify-between items-center p-4 bg-slate-50  rounded-md shadow"
+        >
+          <div>
+            <p class="font-medium text-slate-700 ">
+              Salesforce Account
+            </p>
+            <p class="text-sm text-slate-500 ">
+              UID: {account.uid}
+              <%= if account.email do %>
+                ({account.email})
+              <% end %>
+            </p>
+          </div>
+          <!-- Future: Add a "Disconnect" button here -->
+        </li>
+      </ul>
+    <% else %>
+      <p class="mb-8 text-slate-600 ">
+        You haven't connected any Salesforce accounts yet.
+      </p>
+    <% end %>
+
+    <div>
+      <.link
+        href={~p"/auth/salesforce"}
+        method="get"
+        class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 "
+      >
+        <!-- Salesforce SVG Icon (Cloud) -->
+        <svg
+           class="-ml-1 mr-3 h-5 w-5"
+           viewBox="0 0 24 24" 
+           fill="currentColor"
+           xmlns="http://www.w3.org/2000/svg"
+        >
+          <path d="M17.65 6.84C17.26 4.12 14.85 2 12.02 2 9.17 2 6.78 4.12 6.38 6.83 2.94 7.28 0 10.15 0 13.5c0 3.75 3.33 6.64 7.28 6.5h8.95c3.55 0 6.77-2.6 6.77-6.57 0-3.32-2.78-6.13-5.35-6.59z" opacity=".2"/>
+          <path d="M17.65 6.84C17.26 4.12 14.85 2 12.02 2 9.17 2 6.78 4.12 6.38 6.83 2.94 7.28 0 10.15 0 13.5c0 3.75 3.33 6.64 7.28 6.5h8.95c3.55 0 6.77-2.6 6.77-6.57 0-3.32-2.78-6.13-5.35-6.59z" fill="#00A1E0"/>
+        </svg>
+        <%= if Enum.empty?(@salesforce_accounts) do %>
+          Connect Salesforce
+        <% else %>
+          Connect another Salesforce Account
+        <% end %>
+      </.link>
+    </div>
+  </div>
+
+  <div class="bg-white  shadow-xl rounded-lg p-6 md:p-8">
+    <h2 class="text-2xl font-semibold mb-6 text-slate-700 ">
       Connected Facebook Account
     </h2>
 
