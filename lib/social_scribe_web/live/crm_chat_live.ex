@@ -340,11 +340,14 @@ defmodule SocialScribeWeb.CrmChatLive do
       # Store sources for this message
       sources = extract_provider_sources(contacts)
 
-      # Persist User Message with source contacts info
+      # Convert @mentions to token format for display
+      message_with_tokens = convert_mentions_to_tokens(message, contacts)
+
+      # Persist User Message with source contacts info (store tokenized version)
       {:ok, _} =
         Chats.add_message_to_session(session_id, %{
           role: "user",
-          content: message,
+          content: message_with_tokens,
           context_data: %{"sources" => sources, "contacts" => contacts}
         })
 
@@ -353,7 +356,14 @@ defmodule SocialScribeWeb.CrmChatLive do
 
       history =
         socket.assigns.chat_history ++
-          [%{role: :user, content: message, inserted_at: DateTime.utc_now(), sources: contacts}]
+          [
+            %{
+              role: :user,
+              content: message_with_tokens,
+              inserted_at: DateTime.utc_now(),
+              sources: contacts
+            }
+          ]
 
       # Build conversation history for AI (previous messages only, not current)
       conversation_for_ai =
@@ -384,7 +394,7 @@ defmodule SocialScribeWeb.CrmChatLive do
       Task.start(fn ->
         result =
           AIContentGeneratorApi.answer_crm_question(
-            message,
+            message_with_tokens,
             conversation_for_ai,
             new_accumulated,
             selected_model
@@ -625,70 +635,72 @@ defmodule SocialScribeWeb.CrmChatLive do
   attr :sources, :list, default: []
 
   defp markdown(assigns) do
-    # Configure Earmark options for safety and features if needed
-    html = Earmark.as_html!(assigns.content)
-
-    # If we have sources, replace contact names with styled chip HTML
-    html =
-      if Enum.any?(assigns.sources) do
-        inject_contact_chips(html, assigns.sources)
-      else
-        html
-      end
-
-    assigns = assign(assigns, :html, html)
+    # parse_source_tokens splits content into a list of parts:
+    # [{:text, "some text"}, {:contact, ...}, {:text, " more text"}]
+    parts = parse_source_tokens(assigns.content, assigns.sources)
+    assigns = assign(assigns, :parts, parts)
 
     ~H"""
     <div class="markdown-content">
-      {Phoenix.HTML.raw(@html)}
+      <%= for part <- @parts do %>
+        <%= case part do %>
+          <% {:text, text} -> %>
+            {render_inline_markdown(text)}
+          <% {:contact, provider, _id, name} -> %>
+            <span class="inline-flex items-center gap-1 bg-gray-100 rounded-lg pl-0.5 pr-2 py-0.5 align-middle">
+              <span class={"w-4 h-4 rounded-full inline-flex items-center justify-center text-[7px] text-white font-bold #{provider_color(provider)}"}>
+                {initials_from_name(name)}
+              </span>
+              <span class="text-gray-700 text-sm">{name}</span>
+            </span>
+          <% {:meeting, _id, title} -> %>
+            <span class="inline-flex items-center gap-1 bg-gray-100 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle">
+              <span class="w-4 h-4 rounded-full inline-flex items-center justify-center bg-blue-600">
+                <.icon name="hero-video-camera" class="w-2.5 h-2.5 text-white" />
+              </span>
+              <span class="text-gray-700 text-sm">{title}</span>
+            </span>
+        <% end %>
+      <% end %>
     </div>
     """
   end
 
-  # Injects styled contact chip HTML when contact names are found in the content.
-  # This is a very crude way to do it, but it works (for now).
-  defp inject_contact_chips(html, sources) do
-    # Sort by name length (longest first) to match longer names before shorter ones
-    sorted_sources =
-      sources
-      |> Enum.sort_by(fn contact -> -String.length(contact_full_name(contact)) end)
+  defp render_inline_markdown(text) do
+    # Render markdown
+    html = Earmark.as_html!(text)
 
-    Enum.reduce(sorted_sources, html, fn contact, acc ->
-      name = contact_full_name(contact)
-      provider = contact[:provider] || contact["provider"]
-      initials = contact_initials(contact)
-      color = provider_color(provider)
+    # Check if the original text starts with a newline (indicating an intentional block break)
+    # If not, and the HTML starts with a paragraph, we want to "unwrap" that first paragraph
+    # so it flows inline with the preceding chip.
+    starts_with_newline = Regex.match?(~r/^\s*[\r\n]/, text)
 
-      chip_html =
-        if provider == "google_meet" do
-          ~s(<span class="inline-flex items-center gap-1 bg-gray-100 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle"><span class="w-4 h-4 rounded-full flex items-center justify-center bg-blue-600 shrink-0"><svg class="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></span><span class="text-gray-700 text-sm">#{name}</span></span>)
-        else
-          ~s(<span class="inline-flex items-center gap-1 bg-gray-100 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle"><span class="w-4 h-4 rounded-full flex items-center justify-center text-[7px] text-white font-bold shrink-0 #{color}">#{initials}</span><span class="text-gray-700 text-sm">#{name}</span></span>)
-        end
-
-      # Replace the name with the chip HTML (case insensitive, but preserve original casing is tricky)
-      # Using a simple string replacement - only replace if not already inside a tag.
-      String.replace(acc, name, chip_html)
-    end)
+    if !starts_with_newline and String.starts_with?(html, "<p>") do
+      # Unwrap the first paragraph to make it inline
+      # Use Regex to match only the FIRST paragraph at the start of the string
+      Regex.replace(~r/^<p>(.*?)<\/p>/s, html, "\\1", global: false)
+      |> Phoenix.HTML.raw()
+    else
+      Phoenix.HTML.raw(html)
+    end
   end
 
-  # Renders message content with @mentions displayed as styled contact chips.
-  # The sources list contains contact data that was tagged in the message.
+  # Extracts initials (max 2 chars) from a full name string
+  defp initials_from_name(name) do
+    name
+    |> String.split()
+    |> Enum.map(&String.first/1)
+    |> Enum.take(2)
+    |> Enum.join()
+    |> String.upcase()
+  end
+
+  # Unified component for rendering content with source tokens (works for both user and assistant messages)
   attr :content, :string, required: true
   attr :sources, :list, default: []
 
-  defp message_with_mentions(assigns) do
-    # Build a map of contact names to their data for lookup
-    contact_map =
-      assigns.sources
-      |> Enum.map(fn contact ->
-        name = contact_full_name(contact)
-        {name, contact}
-      end)
-      |> Enum.into(%{})
-
-    # Parse the content and split into parts (text and mentions)
-    parts = parse_mentions(assigns.content, contact_map)
+  defp render_with_tokens(assigns) do
+    parts = parse_source_tokens(assigns.content, assigns.sources)
     assigns = assign(assigns, :parts, parts)
 
     ~H"""
@@ -697,18 +709,19 @@ defmodule SocialScribeWeb.CrmChatLive do
         <%= case part do %>
           <% {:text, text} -> %>
             {text}
-          <% {:mention, name, contact} -> %>
+          <% {:contact, provider, _id, name} -> %>
             <span class="inline-flex items-center gap-1 bg-white/80 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle">
-              <%= if contact[:provider] == "google_meet" do %>
-                <span class="w-4 h-4 rounded-full flex items-center justify-center bg-blue-600 shrink-0">
-                  <.icon name="hero-video-camera" class="w-2 h-2 text-white" />
-                </span>
-              <% else %>
-                <span class={"w-4 h-4 rounded-full flex items-center justify-center text-[7px] text-white font-bold shrink-0 #{provider_color(contact[:provider] || contact["provider"])}"}>
-                  {contact_initials(contact)}
-                </span>
-              <% end %>
+              <span class={"w-4 h-4 rounded-full inline-flex items-center justify-center text-[7px] text-white font-bold #{provider_color(provider)}"}>
+                {initials_from_name(name)}
+              </span>
               <span class="text-gray-700 text-sm">{name}</span>
+            </span>
+          <% {:meeting, _id, title} -> %>
+            <span class="inline-flex items-center gap-1 bg-white/80 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle">
+              <span class="w-4 h-4 rounded-full inline-flex items-center justify-center bg-blue-600">
+                <.icon name="hero-video-camera" class="w-2.5 h-2.5 text-white" />
+              </span>
+              <span class="text-gray-700 text-sm">{title}</span>
             </span>
         <% end %>
       <% end %>
@@ -716,80 +729,78 @@ defmodule SocialScribeWeb.CrmChatLive do
     """
   end
 
-  # Parses message content and returns a list of {:text, string} or {:mention, name, contact} tuples
-  defp parse_mentions(content, contact_map) do
-    if map_size(contact_map) == 0 do
-      [{:text, content}]
-    else
-      # Sort contact names by length (longest first) to match longer names before shorter ones
-      sorted_names = contact_map |> Map.keys() |> Enum.sort_by(&(-String.length(&1)))
+  # Converts @Name mentions to [[contact:provider:id:name]] token format
+  defp convert_mentions_to_tokens(content, contacts) do
+    # Sort by name length (longest first) to match longer names before shorter ones
+    sorted_contacts =
+      contacts
+      |> Enum.sort_by(fn c -> -String.length(contact_full_name(c)) end)
 
-      # Find all mentions with their positions
-      mentions =
-        sorted_names
-        |> Enum.flat_map(fn name ->
-          mention_pattern = "@#{name}"
-          find_all_occurrences(content, mention_pattern, name, contact_map)
+    Enum.reduce(sorted_contacts, content, fn contact, acc ->
+      name = contact_full_name(contact)
+      provider = contact[:provider] || contact["provider"]
+      id = contact[:id] || contact["id"]
+
+      if provider == "google_meet" do
+        String.replace(acc, "@#{name} ", "[[meeting:#{id}:#{name}]] ")
+      else
+        String.replace(acc, "@#{name} ", "[[contact:#{provider}:#{id}:#{name}]] ")
+      end
+    end)
+  end
+
+  # Parses content for [[contact:...]] and [[meeting:...]] tokens
+  # Returns a list of {:text, string}, {:contact, provider, id, name}, or {:meeting, id, title} tuples
+  defp parse_source_tokens(content, _sources) do
+    # Regex to match [[type:data]] tokens
+    # Contact: [[contact:provider:id:name]]
+    # Meeting: [[meeting:id:title]]
+    token_regex = ~r/\[\[(contact|meeting):([^\]]+)\]\]/
+
+    case Regex.split(token_regex, content, include_captures: true, trim: true) do
+      parts when is_list(parts) ->
+        Enum.map(parts, fn part ->
+          cond do
+            String.starts_with?(part, "[[contact:") ->
+              parse_contact_token(part)
+
+            String.starts_with?(part, "[[meeting:") ->
+              parse_meeting_token(part)
+
+            true ->
+              {:text, part}
+          end
         end)
-        |> Enum.sort_by(fn {start, _, _, _} -> start end)
-        |> remove_overlapping_mentions([])
 
-      if Enum.empty?(mentions) do
+      _ ->
         [{:text, content}]
-      else
-        build_parts_from_mentions(content, mentions, 0, [])
-      end
     end
   end
 
-  # Find all occurrences of a mention pattern in the content
-  defp find_all_occurrences(content, pattern, name, contact_map) do
-    case :binary.matches(content, pattern) do
-      [] ->
-        []
+  # Parses [[contact:provider:id:name]] token
+  defp parse_contact_token(token) do
+    # Extract content between [[ and ]]
+    inner = token |> String.trim_leading("[[") |> String.trim_trailing("]]")
 
-      matches ->
-        Enum.map(matches, fn {start, len} ->
-          {start, start + len, name, Map.get(contact_map, name)}
-        end)
+    case String.split(inner, ":", parts: 4) do
+      ["contact", provider, id, name] ->
+        {:contact, provider, id, name}
+
+      _ ->
+        {:text, token}
     end
   end
 
-  # Remove overlapping mentions (keep earlier/longer ones)
-  defp remove_overlapping_mentions([], acc), do: Enum.reverse(acc)
+  # Parses [[meeting:id:title]] token
+  defp parse_meeting_token(token) do
+    inner = token |> String.trim_leading("[[") |> String.trim_trailing("]]")
 
-  defp remove_overlapping_mentions([mention | rest], acc) do
-    {_start, end_pos, _name, _contact} = mention
+    case String.split(inner, ":", parts: 3) do
+      ["meeting", id, title] ->
+        {:meeting, id, title}
 
-    # Filter out any mentions that would overlap with this one
-    filtered_rest = Enum.reject(rest, fn {s, _, _, _} -> s < end_pos end)
-    remove_overlapping_mentions(filtered_rest, [mention | acc])
-  end
-
-  # Build parts from the sorted, non-overlapping mentions
-  defp build_parts_from_mentions(content, [], pos, acc) do
-    remaining = String.slice(content, pos..-1//1)
-
-    if remaining == "" do
-      Enum.reverse(acc)
-    else
-      Enum.reverse([{:text, remaining} | acc])
+      _ ->
+        {:text, token}
     end
-  end
-
-  defp build_parts_from_mentions(content, [{start, end_pos, name, contact} | rest], pos, acc) do
-    # Add text before this mention
-    acc =
-      if start > pos do
-        text = String.slice(content, pos..(start - 1)//1)
-        [{:text, text} | acc]
-      else
-        acc
-      end
-
-    # Add the mention
-    acc = [{:mention, name, contact} | acc]
-
-    build_parts_from_mentions(content, rest, end_pos, acc)
   end
 end

@@ -169,6 +169,20 @@ defmodule SocialScribe.AIContentGenerator do
         You are a helpful CRM assistant with access to contact information from one or more CRM sources.
         You can answer questions about contacts, compare information across different sources, and provide insights.
 
+        IMPORTANT - Mention Formatting:
+        When you want to show a contact or meeting as a styled inline mention (with avatar/icon), use these token formats:
+        - For contacts: [[contact:PROVIDER:ID:Full Name]]
+        - For meetings: [[meeting:ID:Title]]
+
+        Examples:
+        - "I found information about [[contact:salesforce:123:John Rabbit]]"
+        - "In the [[meeting:456:Weekly Standup]], Tim discussed..."
+
+        Use plain text (no tokens) for:
+        - Headings and section titles
+        - Bullet point labels (e.g., "Name:", "Email:")
+        - When the name appears multiple times in quick succession
+
         Available Contact Sources:
         #{sources_info}
         """
@@ -225,9 +239,11 @@ defmodule SocialScribe.AIContentGenerator do
     |> Enum.with_index(1)
     |> Enum.map(fn {contact, idx} ->
       provider = contact[:provider] || contact["provider"] || "unknown"
+      id = contact[:id] || contact["id"]
 
       if provider == "google_meet" do
         meeting_data = contact[:meeting] || contact["meeting"]
+        title = contact[:lastname] || contact["lastname"] || "Meeting"
 
         prompt =
           case meeting_data do
@@ -243,6 +259,7 @@ defmodule SocialScribe.AIContentGenerator do
 
         """
         [Source #{idx}: Google Meet Transcript]
+        Token to use: [[meeting:#{id}:#{title}]]
         #{prompt}
         """
       else
@@ -251,6 +268,7 @@ defmodule SocialScribe.AIContentGenerator do
 
         """
         [Source #{idx}: #{String.capitalize(provider)} - #{name}]
+        Token to use: [[contact:#{provider}:#{id}:#{name}]]
         #{Jason.encode!(contact, pretty: true)}
         """
       end

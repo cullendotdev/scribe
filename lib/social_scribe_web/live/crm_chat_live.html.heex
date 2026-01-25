@@ -107,10 +107,7 @@
             <% else %>
               <!-- User Message -->
               <div class="self-end bg-slate-100 text-slate-800 rounded-xl rounded-tr-none px-4 py-3 text-sm max-w-[90%]">
-                <.message_with_mentions
-                  content={msg.content}
-                  sources={Map.get(msg, :sources, [])}
-                />
+                <.render_with_tokens content={msg.content} sources={Map.get(msg, :sources, [])} />
               </div>
             <% end %>
           </div>
