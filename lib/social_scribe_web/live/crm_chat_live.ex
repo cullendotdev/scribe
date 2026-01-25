@@ -634,4 +634,125 @@ defmodule SocialScribeWeb.CrmChatLive do
     </div>
     """
   end
+
+  # Renders message content with @mentions displayed as styled contact chips.
+  # The sources list contains contact data that was tagged in the message.
+  attr :content, :string, required: true
+  attr :sources, :list, default: []
+
+  defp message_with_mentions(assigns) do
+    # Build a map of contact names to their data for lookup
+    contact_map =
+      assigns.sources
+      |> Enum.map(fn contact ->
+        name = contact_full_name(contact)
+        {name, contact}
+      end)
+      |> Enum.into(%{})
+
+    # Parse the content and split into parts (text and mentions)
+    parts = parse_mentions(assigns.content, contact_map)
+    assigns = assign(assigns, :parts, parts)
+
+    ~H"""
+    <span>
+      <%= for part <- @parts do %>
+        <%= case part do %>
+          <% {:text, text} -> %>
+            {text}
+          <% {:mention, name, contact} -> %>
+            <span class="inline-flex items-center gap-1 bg-white/80 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle">
+              <%= if contact[:provider] == "google_meet" do %>
+                <span class="w-4 h-4 rounded-full flex items-center justify-center bg-blue-600 shrink-0">
+                  <.icon name="hero-video-camera" class="w-2 h-2 text-white" />
+                </span>
+              <% else %>
+                <span class={"w-4 h-4 rounded-full flex items-center justify-center text-[7px] text-white font-bold shrink-0 #{provider_color(contact[:provider] || contact["provider"])}"}>
+                  {contact_initials(contact)}
+                </span>
+              <% end %>
+              <span class="text-gray-700 text-sm">{name}</span>
+            </span>
+        <% end %>
+      <% end %>
+    </span>
+    """
+  end
+
+  # Parses message content and returns a list of {:text, string} or {:mention, name, contact} tuples
+  defp parse_mentions(content, contact_map) do
+    if map_size(contact_map) == 0 do
+      [{:text, content}]
+    else
+      # Sort contact names by length (longest first) to match longer names before shorter ones
+      sorted_names = contact_map |> Map.keys() |> Enum.sort_by(&(-String.length(&1)))
+
+      # Find all mentions with their positions
+      mentions =
+        sorted_names
+        |> Enum.flat_map(fn name ->
+          mention_pattern = "@#{name}"
+          find_all_occurrences(content, mention_pattern, name, contact_map)
+        end)
+        |> Enum.sort_by(fn {start, _, _, _} -> start end)
+        |> remove_overlapping_mentions([])
+
+      if Enum.empty?(mentions) do
+        [{:text, content}]
+      else
+        build_parts_from_mentions(content, mentions, 0, [])
+      end
+    end
+  end
+
+  # Find all occurrences of a mention pattern in the content
+  defp find_all_occurrences(content, pattern, name, contact_map) do
+    case :binary.matches(content, pattern) do
+      [] ->
+        []
+
+      matches ->
+        Enum.map(matches, fn {start, len} ->
+          {start, start + len, name, Map.get(contact_map, name)}
+        end)
+    end
+  end
+
+  # Remove overlapping mentions (keep earlier/longer ones)
+  defp remove_overlapping_mentions([], acc), do: Enum.reverse(acc)
+
+  defp remove_overlapping_mentions([mention | rest], acc) do
+    {_start, end_pos, _name, _contact} = mention
+
+    # Filter out any mentions that would overlap with this one
+    filtered_rest = Enum.reject(rest, fn {s, _, _, _} -> s < end_pos end)
+    remove_overlapping_mentions(filtered_rest, [mention | acc])
+  end
+
+  # Build parts from the sorted, non-overlapping mentions
+  defp build_parts_from_mentions(content, [], pos, acc) do
+    remaining = String.slice(content, pos..-1//1)
+
+    if remaining == "" do
+      Enum.reverse(acc)
+    else
+      Enum.reverse([{:text, remaining} | acc])
+    end
+  end
+
+  defp build_parts_from_mentions(content, [{start, end_pos, name, contact} | rest], pos, acc) do
+    # Add text before this mention
+    acc =
+      if start > pos do
+        text = String.slice(content, pos..(start - 1)//1)
+        [{:text, text} | acc]
+      else
+        acc
+      end
+
+    # Add the mention
+    acc = [{:mention, name, contact} | acc]
+
+    build_parts_from_mentions(content, rest, end_pos, acc)
+  end
 end
