@@ -47,88 +47,43 @@ defmodule SocialScribe.AIContentGenerator do
 
   @impl SocialScribe.AIContentGeneratorApi
   def generate_hubspot_suggestions(meeting) do
-    case Meetings.generate_prompt_for_meeting(meeting) do
-      {:error, reason} ->
-        {:error, reason}
-
-      {:ok, meeting_prompt} ->
-        prompt = """
-        You are an AI assistant that extracts contact information updates from meeting transcripts.
-
-        Analyze the following meeting transcript and extract any information that could be used to update a CRM contact record.
-
-        Look for mentions of:
-        - Phone numbers (phone, mobilephone)
-        - Email addresses (email)
-        - Company name (company)
-        - Job title/role (jobtitle)
-        - Physical address details (address, city, state, zip, country)
-        - Website URLs (website)
-        - LinkedIn profile (linkedin_url)
-        - Twitter handle (twitter_handle)
-
-        IMPORTANT: Only extract information that is EXPLICITLY mentioned in the transcript. Do not infer or guess.
-
-        The transcript includes timestamps in [MM:SS] format at the start of each line.
-
-        Return your response as a JSON array of objects. Each object should have:
-        - "field": the CRM field name (use exactly: firstname, lastname, email, phone, mobilephone, company, jobtitle, address, city, state, zip, country, website, linkedin_url, twitter_handle)
-        - "value": the extracted value
-        - "context": a brief quote of where this was mentioned
-        - "timestamp": the timestamp in MM:SS format where this was mentioned
-
-        If no contact information updates are found, return an empty array: []
-
-        Example response format:
-        [
-          {"field": "phone", "value": "555-123-4567", "context": "John mentioned 'you can reach me at 555-123-4567'", "timestamp": "01:23"},
-          {"field": "company", "value": "Acme Corp", "context": "Sarah said she just joined Acme Corp", "timestamp": "05:47"}
-        ]
-
-        ONLY return valid JSON, no other text.
-
-        Meeting transcript:
-        #{meeting_prompt}
-        """
-
-        case call_gemini(prompt) do
-          {:ok, response} ->
-            parse_suggestions(response)
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-    end
+    generate_crm_suggestions("hubspot", meeting)
   end
 
   @impl SocialScribe.AIContentGeneratorApi
   def generate_salesforce_suggestions(meeting) do
+    generate_crm_suggestions("salesforce", meeting)
+  end
+
+  defp generate_crm_suggestions(provider, meeting) do
+    config = SocialScribe.Crm.Config.get(provider)
+
+    field_descriptions =
+      config.fields
+      |> Enum.map(fn {field, %{label: label}} -> "- #{label} (#{field})" end)
+      |> Enum.join("\n")
+
+    field_list = config.fields |> Map.keys() |> Enum.join(", ")
+
     case Meetings.generate_prompt_for_meeting(meeting) do
       {:error, reason} ->
         {:error, reason}
 
       {:ok, meeting_prompt} ->
         prompt = """
-        You are an AI assistant that extracts contact information updates from meeting transcripts for Salesforce.
+        You are an AI assistant that extracts contact information updates from meeting transcripts for #{config.label}.
 
-        Analyze the following meeting transcript and extract any information that could be used to update a Salesforce Contact record.
+        Analyze the following meeting transcript and extract any information that could be used to update a #{config.label} contact record.
 
         Look for mentions of:
-        - First Name (FirstName)
-        - Last Name (LastName)
-        - Email (Email)
-        - Phone number (Phone)
-        - Mobile Phone (MobilePhone)
-        - Job Title (Title)
-        - Department (Department)
-        - Mailing Address (MailingStreet, MailingCity, MailingState, MailingPostalCode, MailingCountry)
+        #{field_descriptions}
 
         IMPORTANT: Only extract information that is EXPLICITLY mentioned in the transcript. Do not infer or guess.
 
         The transcript includes timestamps in [MM:SS] format at the start of each line.
 
         Return your response as a JSON array of objects. Each object should have:
-        - "field": the Salesforce API field name (use exactly: FirstName, LastName, Email, Phone, MobilePhone, Title, Department, MailingStreet, MailingCity, MailingState, MailingPostalCode, MailingCountry)
+        - "field": the #{config.label} field name (use exactly one of: #{field_list})
         - "value": the extracted value
         - "context": a brief quote of where this was mentioned
         - "timestamp": the timestamp in MM:SS format where this was mentioned
@@ -148,11 +103,8 @@ defmodule SocialScribe.AIContentGenerator do
         """
 
         case call_gemini(prompt) do
-          {:ok, response} ->
-            parse_suggestions(response)
-
-          {:error, reason} ->
-            {:error, reason}
+          {:ok, response} -> parse_suggestions(response)
+          {:error, reason} -> {:error, reason}
         end
     end
   end
@@ -185,6 +137,8 @@ defmodule SocialScribe.AIContentGenerator do
 
         Available Contact Sources:
         #{sources_info}
+
+        IMPORTANT: If some properties for a contact are "Not Available", "Information not available", or null, DO NOT list them in your response. Only show properties for which you actually have data.
         """
       else
         """

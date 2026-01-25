@@ -40,6 +40,13 @@ defmodule Ueberauth.Strategy.Hubspot.OAuth do
   end
 
   @doc """
+  Returns the configured token URL.
+  """
+  def token_url do
+    client().token_url
+  end
+
+  @doc """
   Provides the authorize url for the request phase of Ueberauth.
   """
   def authorize_url!(params \\ [], opts \\ []) do
