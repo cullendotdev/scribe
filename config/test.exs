@@ -44,3 +44,5 @@ config :phoenix_live_view,
 config :social_scribe, :salesforce_api, SocialScribe.SalesforceApiMock
 config :social_scribe, :hubspot_api, SocialScribe.HubspotApiMock
 config :social_scribe, :ai_content_generator_api, SocialScribe.AIContentGeneratorApiMock
+
+config :tesla, adapter: Tesla.Mock
