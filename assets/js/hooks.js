@@ -114,6 +114,17 @@ Hooks.MentionsHandler = {
     });
 
     this.input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.shiftKey) {
+        e.preventDefault();
+        const form = this.el.closest("form");
+        const submitBtn = form?.querySelector('button[type="submit"]');
+
+        if (submitBtn && !submitBtn.disabled) {
+          submitBtn.click();
+        }
+        return;
+      }
+
       if (e.key === "Backspace") {
         const start = this.input.selectionStart;
         const end = this.input.selectionEnd;
