@@ -116,7 +116,11 @@
                   <div class="mt-2 flex items-center gap-2 text-xs text-gray-400">
                     <span>Sources</span>
                     <%= for contact <- msg.sources do %>
-                      <.contact_icon contact={contact} class="w-4 h-4 text-[7px] cursor-default" />
+                      <.crm_icon
+                        provider={contact[:provider] || contact["provider"]}
+                        contact={contact}
+                        class="w-4 h-4 text-[7px] cursor-default"
+                      />
                     <% end %>
                   </div>
                 <% end %>
@@ -321,10 +325,14 @@
                         phx-click="remove_contact"
                         phx-value-id={contact.id}
                         phx-value-provider={contact.provider}
-                        title={"Remove #{contact.firstname} #{contact.lastname}"}
+                        title={"Remove #{contact[:firstname] || contact["firstname"]} #{contact[:lastname] || contact["lastname"]}"}
                         class="ring-1 ring-white shadow-sm transition-transform hover:scale-110 rounded-full"
                       >
-                        <.contact_icon contact={contact} class="w-4 h-4 text-[7px]" />
+                        <.crm_icon
+                          provider={contact[:provider] || contact["provider"]}
+                          contact={contact}
+                          class="w-4 h-4 text-[7px]"
+                        />
                       </button>
                     <% end %>
                   </div>
@@ -463,7 +471,11 @@
                             )
                           ]}
                         >
-                          <.contact_icon contact={contact} class="w-4 h-4 text-[7px]" />
+                          <.crm_icon
+                            provider={contact.provider}
+                            contact={contact}
+                            class="w-4 h-4 text-[7px]"
+                          />
                           <div class="truncate">
                             <span class="font-medium text-gray-900">
                               {contact.firstname} {contact.lastname}

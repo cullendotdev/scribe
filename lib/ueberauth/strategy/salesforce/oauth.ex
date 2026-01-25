@@ -25,6 +25,13 @@ defmodule Ueberauth.Strategy.Salesforce.OAuth do
     |> OAuth2.Client.put_serializer("application/json", json_library)
   end
 
+  @doc """
+  Returns the configured token URL.
+  """
+  def token_url do
+    client().token_url
+  end
+
   def authorize_url!(params \\ [], opts \\ []) do
     opts
     |> client

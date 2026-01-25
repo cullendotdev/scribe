@@ -21,8 +21,7 @@ config :social_scribe, Oban,
     {Oban.Plugins.Cron,
      crontab: [
        {"*/2 * * * *", SocialScribe.Workers.BotStatusPoller},
-       {"*/5 * * * *", SocialScribe.Workers.HubspotTokenRefresher},
-       {"*/5 * * * *", SocialScribe.Workers.SalesforceTokenRefresher}
+       {"*/5 * * * *", SocialScribe.Workers.CrmTokenRefresher}
      ]}
   ]
 

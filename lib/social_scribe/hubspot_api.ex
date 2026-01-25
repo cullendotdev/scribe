@@ -7,17 +7,11 @@ defmodule SocialScribe.HubspotApi do
   @behaviour SocialScribe.CrmApiBehaviour
 
   alias SocialScribe.Accounts.UserCredential
-  alias SocialScribe.HubspotTokenRefresher
-
-  require Logger
+  alias SocialScribe.Crm.BaseApi
 
   @impl SocialScribe.CrmApiBehaviour
   def display_properties do
-    %{
-      color: "bg-orange-500",
-      initial: "H",
-      label: "HubSpot"
-    }
+    SocialScribe.Crm.Config.get("hubspot")
   end
 
   @base_url "https://api.hubapi.com"
@@ -40,26 +34,14 @@ defmodule SocialScribe.HubspotApi do
     "twitterhandle"
   ]
 
-  defp client(access_token) do
-    Tesla.client([
-      {Tesla.Middleware.BaseUrl, @base_url},
-      Tesla.Middleware.JSON,
-      {Tesla.Middleware.Headers,
-       [
-         {"Authorization", "Bearer #{access_token}"},
-         {"Content-Type", "application/json"}
-       ]}
-    ])
-  end
+  defp client(access_token), do: BaseApi.client(@base_url, access_token)
 
   @doc """
   Searches for contacts by query string.
-  Returns up to 10 matching contacts with basic properties.
-  Automatically refreshes token on 401/expired errors and retries once.
   """
   @impl SocialScribe.CrmApiBehaviour
   def search_contacts(%UserCredential{} = credential, query) when is_binary(query) do
-    with_token_refresh(credential, fn cred ->
+    BaseApi.with_token_refresh(credential, fn cred ->
       body = %{
         query: query,
         limit: 10,
@@ -82,11 +64,10 @@ defmodule SocialScribe.HubspotApi do
 
   @doc """
   Gets a single contact by ID with all properties.
-  Automatically refreshes token on 401/expired errors and retries once.
   """
   @impl SocialScribe.CrmApiBehaviour
   def get_contact(%UserCredential{} = credential, contact_id) do
-    with_token_refresh(credential, fn cred ->
+    BaseApi.with_token_refresh(credential, fn cred ->
       properties_param = Enum.join(@contact_properties, ",")
       url = "/crm/v3/objects/contacts/#{contact_id}?properties=#{properties_param}"
 
@@ -108,13 +89,11 @@ defmodule SocialScribe.HubspotApi do
 
   @doc """
   Updates a contact's properties.
-  `updates` should be a map of property names to new values.
-  Automatically refreshes token on 401/expired errors and retries once.
   """
   @impl SocialScribe.CrmApiBehaviour
   def update_contact(%UserCredential{} = credential, contact_id, updates)
       when is_map(updates) do
-    with_token_refresh(credential, fn cred ->
+    BaseApi.with_token_refresh(credential, fn cred ->
       body = %{properties: updates}
 
       case Tesla.patch(client(cred.token), "/crm/v3/objects/contacts/#{contact_id}", body) do
@@ -135,7 +114,6 @@ defmodule SocialScribe.HubspotApi do
 
   @doc """
   Batch updates multiple properties on a contact.
-  This is a convenience wrapper around update_contact/3.
   """
   @impl SocialScribe.CrmApiBehaviour
   def apply_updates(%UserCredential{} = credential, contact_id, updates_list)
@@ -193,55 +171,4 @@ defmodule SocialScribe.HubspotApi do
       name
     end
   end
-
-  # Wrapper that handles token refresh on auth errors
-  # Tries the API call, and if it fails with 401 or BAD_CLIENT_ID, refreshes token and retries once
-  defp with_token_refresh(%UserCredential{} = credential, api_call) do
-    with {:ok, credential} <- HubspotTokenRefresher.ensure_valid_token(credential) do
-      case api_call.(credential) do
-        {:error, {:api_error, status, body}} when status in [401, 400] ->
-          if is_token_error?(body) do
-            Logger.info("HubSpot token expired, refreshing and retrying...")
-            retry_with_fresh_token(credential, api_call)
-          else
-            Logger.error("HubSpot API error: #{status} - #{inspect(body)}")
-            {:error, {:api_error, status, body}}
-          end
-
-        other ->
-          other
-      end
-    end
-  end
-
-  defp retry_with_fresh_token(credential, api_call) do
-    case HubspotTokenRefresher.refresh_credential(credential) do
-      {:ok, refreshed_credential} ->
-        case api_call.(refreshed_credential) do
-          {:error, {:api_error, status, body}} ->
-            Logger.error("HubSpot API error after refresh: #{status} - #{inspect(body)}")
-            {:error, {:api_error, status, body}}
-
-          {:error, {:http_error, reason}} ->
-            Logger.error("HubSpot HTTP error after refresh: #{inspect(reason)}")
-            {:error, {:http_error, reason}}
-
-          success ->
-            success
-        end
-
-      {:error, refresh_error} ->
-        Logger.error("Failed to refresh HubSpot token: #{inspect(refresh_error)}")
-        {:error, {:token_refresh_failed, refresh_error}}
-    end
-  end
-
-  defp is_token_error?(%{"status" => "BAD_CLIENT_ID"}), do: true
-  defp is_token_error?(%{"status" => "UNAUTHORIZED"}), do: true
-
-  defp is_token_error?(%{"message" => msg}) when is_binary(msg) do
-    String.contains?(String.downcase(msg), ["token", "expired", "unauthorized", "client id"])
-  end
-
-  defp is_token_error?(_), do: false
 end
