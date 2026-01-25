@@ -1,4 +1,10 @@
 <div class="h-full flex flex-col bg-white overflow-hidden relative" id="crm-chat-container">
+  <div
+    id="sidebar-resize-handle"
+    phx-hook="SidebarResizer"
+    class="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-col-resize z-[100] hover:bg-indigo-500/50 transition-colors"
+  >
+  </div>
   <!-- Header -->
   <div class="p-4 flex items-center justify-between shrink-0">
     <h2 class="text-lg font-semibold text-gray-900">Ask Anything</h2>

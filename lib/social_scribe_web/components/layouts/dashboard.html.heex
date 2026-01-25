@@ -66,8 +66,16 @@
       </main>
     </div>
 
-    <div id="crm-chat-sidebar-container" class="w-[400px] bg-white border-l border-gray-200 shadow-lg flex flex-col z-10 shrink-0 transform transition-transform duration-300 ease-in-out translate-x-0 h-full">
-      <%= live_render(@socket, SocialScribeWeb.CrmChatLive, id: "crm-chat-sidebar", session: %{"user_id" => @current_user.id}, container: {:div, style: "height: 100%"}) %>
+    <div
+      id="crm-chat-sidebar-container"
+      style="width: 400px;"
+      class="bg-white border-l border-gray-200 shadow-lg flex flex-col z-10 shrink-0 transform transition-transform duration-300 ease-in-out translate-x-0 h-full"
+    >
+      {live_render(@socket, SocialScribeWeb.CrmChatLive,
+        id: "crm-chat-sidebar",
+        session: %{"user_id" => @current_user.id},
+        container: {:div, style: "height: 100%"}
+      )}
     </div>
   </div>
 </div>

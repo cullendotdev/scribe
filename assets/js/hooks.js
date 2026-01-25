@@ -185,4 +185,64 @@ Hooks.MentionsHandler = {
   },
 };
 
+Hooks.SidebarResizer = {
+  mounted() {
+    this.handle = this.el;
+    this.container = document.getElementById("crm-chat-sidebar-container");
+    this.isResizing = false;
+
+    if (!this.container) {
+      console.warn(
+        "SidebarResizer: Container #crm-chat-sidebar-container not found",
+      );
+      return;
+    }
+
+    this.startResize = (e) => {
+      e.preventDefault();
+      this.isResizing = true;
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "col-resize";
+      // Keep the handle visible while dragging
+      this.handle.classList.add("bg-indigo-500", "opacity-100");
+
+      document.addEventListener("mousemove", this.doResize);
+      document.addEventListener("mouseup", this.stopResize);
+    };
+
+    this.doResize = (e) => {
+      if (!this.isResizing) return;
+
+      // Calculate new width (Right Sidebar: Width = Window Width - Mouse X)
+      // Clamped between 300 and 800
+      let newWidth = window.innerWidth - e.clientX;
+      if (newWidth < 300) newWidth = 300;
+      if (newWidth > 800) newWidth = 800;
+
+      this.container.style.width = `${newWidth}px`;
+    };
+
+    this.stopResize = () => {
+      this.isResizing = false;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      this.handle.classList.remove("bg-indigo-500", "opacity-100");
+
+      document.removeEventListener("mousemove", this.doResize);
+      document.removeEventListener("mouseup", this.stopResize);
+    };
+
+    this.handle.addEventListener("mousedown", this.startResize);
+  },
+
+  destroyed() {
+    if (this.handle) {
+      this.handle.removeEventListener("mousedown", this.startResize);
+    }
+    // Cleanup global listeners just in case
+    document.removeEventListener("mousemove", this.doResize);
+    document.removeEventListener("mouseup", this.stopResize);
+  },
+};
+
 export default Hooks;
