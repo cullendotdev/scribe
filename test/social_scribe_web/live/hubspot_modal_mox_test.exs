@@ -188,7 +188,7 @@ defmodule SocialScribeWeb.HubspotModalMoxTest do
       end)
 
       assert {:ok, ^expected} =
-               SocialScribe.HubspotApiBehaviour.search_contacts(credential, "test query")
+               SocialScribe.CrmApiBehaviour.search_contacts(credential, "test query")
     end
 
     test "get_contact delegates to implementation", %{credential: credential} do
@@ -200,7 +200,7 @@ defmodule SocialScribeWeb.HubspotModalMoxTest do
         {:ok, expected}
       end)
 
-      assert {:ok, ^expected} = SocialScribe.HubspotApiBehaviour.get_contact(credential, "123")
+      assert {:ok, ^expected} = SocialScribe.CrmApiBehaviour.get_contact(credential, "123")
     end
 
     test "update_contact delegates to implementation", %{credential: credential} do
@@ -215,7 +215,7 @@ defmodule SocialScribeWeb.HubspotModalMoxTest do
       end)
 
       assert {:ok, ^expected} =
-               SocialScribe.HubspotApiBehaviour.update_contact(credential, "123", updates)
+               SocialScribe.CrmApiBehaviour.update_contact(credential, "123", updates)
     end
 
     test "apply_updates delegates to implementation", %{credential: credential} do
@@ -232,7 +232,7 @@ defmodule SocialScribeWeb.HubspotModalMoxTest do
       end)
 
       assert {:ok, _} =
-               SocialScribe.HubspotApiBehaviour.apply_updates(credential, "123", updates_list)
+               SocialScribe.CrmApiBehaviour.apply_updates(credential, "123", updates_list)
     end
   end
 

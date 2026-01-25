@@ -153,6 +153,7 @@ defmodule SocialScribe.SalesforceApi do
   Batch updates multiple properties on a contact.
   This is a convenience wrapper around update_contact/3.
   """
+  @impl SocialScribe.CrmApiBehaviour
   def apply_updates(%UserCredential{} = credential, contact_id, updates_list)
       when is_list(updates_list) do
     updates_map =

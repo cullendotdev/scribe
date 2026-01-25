@@ -8,9 +8,8 @@ defmodule SocialScribeWeb.MeetingLive.Show do
   alias SocialScribe.Meetings
   alias SocialScribe.Automations
   alias SocialScribe.Accounts
-  alias SocialScribe.HubspotApiBehaviour, as: HubspotApi
+  alias SocialScribe.CrmApiBehaviour
   alias SocialScribe.HubspotSuggestions
-  alias SocialScribe.SalesforceApiBehaviour, as: SalesforceApi
   alias SocialScribe.SalesforceSuggestions
 
   @impl true
@@ -85,7 +84,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
 
   @impl true
   def handle_info({:hubspot_search, query, credential}, socket) do
-    case HubspotApi.search_contacts(credential, query) do
+    case CrmApiBehaviour.search_contacts(credential, query) do
       {:ok, contacts} ->
         send_update(SocialScribeWeb.MeetingLive.HubspotModalComponent,
           id: "hubspot-modal",
@@ -106,7 +105,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
 
   @impl true
   def handle_info({:salesforce_search, query, credential}, socket) do
-    case SalesforceApi.search_contacts(credential, query) do
+    case CrmApiBehaviour.search_contacts(credential, query) do
       {:ok, contacts} ->
         send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
           id: "salesforce-modal",
@@ -175,7 +174,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
 
   @impl true
   def handle_info({:apply_hubspot_updates, updates, contact, credential}, socket) do
-    case HubspotApi.update_contact(credential, contact.id, updates) do
+    case CrmApiBehaviour.update_contact(credential, contact.id, updates) do
       {:ok, _updated_contact} ->
         socket =
           socket
@@ -197,7 +196,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
 
   @impl true
   def handle_info({:apply_salesforce_updates, updates, contact, credential}, socket) do
-    case SalesforceApi.update_contact(credential, contact.id, updates) do
+    case CrmApiBehaviour.update_contact(credential, contact.id, updates) do
       {:ok, _updated_contact} ->
         socket =
           socket
