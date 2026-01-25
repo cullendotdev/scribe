@@ -4,37 +4,12 @@ defmodule SocialScribe.SalesforceApi do
   Implements automatic token refresh on 401/expired token errors.
   """
 
-  @behaviour SocialScribe.CrmApiBehaviour
-
-  alias SocialScribe.Accounts.UserCredential
-  alias SocialScribe.Crm.BaseApi
-
-  require Logger
-
-  @impl SocialScribe.CrmApiBehaviour
-  def display_properties do
-    SocialScribe.Crm.Config.get("salesforce")
-  end
+  use SocialScribe.Crm.ApiMacros, provider: "salesforce"
 
   @api_version "v60.0"
 
-  # Standard Salesforce Contact fields to retrieve
-  @contact_fields [
-    "Id",
-    "FirstName",
-    "LastName",
-    "Email",
-    "Phone",
-    "MobilePhone",
-    "Account.Name",
-    "Title",
-    "MailingStreet",
-    "MailingCity",
-    "MailingState",
-    "MailingPostalCode",
-    "MailingCountry",
-    "Department"
-  ]
+  # Get contact fields from Config
+  @contact_fields Config.api_fields("salesforce")
 
   defp client(instance_url, access_token), do: BaseApi.client(instance_url, access_token)
 
@@ -130,64 +105,13 @@ defmodule SocialScribe.SalesforceApi do
     end)
   end
 
-  @doc """
-  Batch updates multiple properties on a contact.
-  """
-  @impl SocialScribe.CrmApiBehaviour
-  def apply_updates(%UserCredential{} = credential, contact_id, updates_list)
-      when is_list(updates_list) do
-    updates_map =
-      updates_list
-      |> Enum.filter(fn update -> update[:apply] == true end)
-      |> Enum.reduce(%{}, fn update, acc ->
-        Map.put(acc, update.field, update.new_value)
-      end)
-
-    if map_size(updates_map) > 0 do
-      update_contact(credential, contact_id, updates_map)
-    else
-      {:ok, :no_updates}
-    end
-  end
-
   defp get_instance_url(credential) do
     # Fallback, though likely wrong if missing
     credential.meta["instance_url"] || "https://login.salesforce.com"
   end
 
-  # Format a Salesforce contact response into a cleaner structure matching HubspotApi
+  # Format a Salesforce contact response using the shared ContactFormatter
   defp format_contact(record) do
-    %{
-      id: record["Id"],
-      firstname: record["FirstName"],
-      lastname: record["LastName"],
-      email: record["Email"],
-      phone: record["Phone"],
-      mobilephone: record["MobilePhone"],
-      company: get_in(record, ["Account", "Name"]),
-      jobtitle: record["Title"],
-      address: record["MailingStreet"],
-      city: record["MailingCity"],
-      state: record["MailingState"],
-      zip: record["MailingPostalCode"],
-      country: record["MailingCountry"],
-      department: record["Department"],
-      provider: "salesforce",
-      display_name: format_display_name(record)
-    }
-  end
-
-  defp format_display_name(record) do
-    firstname = record["FirstName"] || ""
-    lastname = record["LastName"] || ""
-    email = record["Email"] || ""
-
-    name = String.trim("#{firstname} #{lastname}")
-
-    if name == "" do
-      email
-    else
-      name
-    end
+    ContactFormatter.build_contact("salesforce", record["Id"], record)
   end
 end

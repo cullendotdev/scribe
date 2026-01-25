@@ -89,4 +89,23 @@ defmodule SocialScribe.Crm.BaseApi do
 
   defp is_token_error?("salesforce", status, _body) when status in [401, 403], do: true
   defp is_token_error?(_, _, _), do: false
+
+  @doc """
+  Shared implementation for batch updating contact properties.
+  Filters to only apply updates marked with `apply: true`.
+  Delegates the actual update to the provider-specific API module.
+  """
+  def apply_updates(api_module, credential, contact_id, updates_list)
+      when is_list(updates_list) do
+    updates_map =
+      updates_list
+      |> Enum.filter(fn update -> update[:apply] == true end)
+      |> Enum.into(%{}, fn update -> {update.field, update.new_value} end)
+
+    if map_size(updates_map) > 0 do
+      api_module.update_contact(credential, contact_id, updates_map)
+    else
+      {:ok, :no_updates}
+    end
+  end
 end

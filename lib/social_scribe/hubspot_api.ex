@@ -4,35 +4,12 @@ defmodule SocialScribe.HubspotApi do
   Implements automatic token refresh on 401/expired token errors.
   """
 
-  @behaviour SocialScribe.CrmApiBehaviour
-
-  alias SocialScribe.Accounts.UserCredential
-  alias SocialScribe.Crm.BaseApi
-
-  @impl SocialScribe.CrmApiBehaviour
-  def display_properties do
-    SocialScribe.Crm.Config.get("hubspot")
-  end
+  use SocialScribe.Crm.ApiMacros, provider: "hubspot"
 
   @base_url "https://api.hubapi.com"
 
-  @contact_properties [
-    "firstname",
-    "lastname",
-    "email",
-    "phone",
-    "mobilephone",
-    "company",
-    "jobtitle",
-    "address",
-    "city",
-    "state",
-    "zip",
-    "country",
-    "website",
-    "hs_linkedin_url",
-    "twitterhandle"
-  ]
+  # Get contact properties from Config
+  @contact_properties Config.api_fields("hubspot")
 
   defp client(access_token), do: BaseApi.client(@base_url, access_token)
 
@@ -112,63 +89,10 @@ defmodule SocialScribe.HubspotApi do
     end)
   end
 
-  @doc """
-  Batch updates multiple properties on a contact.
-  """
-  @impl SocialScribe.CrmApiBehaviour
-  def apply_updates(%UserCredential{} = credential, contact_id, updates_list)
-      when is_list(updates_list) do
-    updates_map =
-      updates_list
-      |> Enum.filter(fn update -> update[:apply] == true end)
-      |> Enum.reduce(%{}, fn update, acc ->
-        Map.put(acc, update.field, update.new_value)
-      end)
-
-    if map_size(updates_map) > 0 do
-      update_contact(credential, contact_id, updates_map)
-    else
-      {:ok, :no_updates}
-    end
-  end
-
-  # Format a HubSpot contact response into a cleaner structure
+  # Format a HubSpot contact response using the shared ContactFormatter
   defp format_contact(%{"id" => id, "properties" => properties}) do
-    %{
-      id: id,
-      firstname: properties["firstname"],
-      lastname: properties["lastname"],
-      email: properties["email"],
-      phone: properties["phone"],
-      mobilephone: properties["mobilephone"],
-      company: properties["company"],
-      jobtitle: properties["jobtitle"],
-      address: properties["address"],
-      city: properties["city"],
-      state: properties["state"],
-      zip: properties["zip"],
-      country: properties["country"],
-      website: properties["website"],
-      linkedin_url: properties["hs_linkedin_url"],
-      twitter_handle: properties["twitterhandle"],
-      provider: "hubspot",
-      display_name: format_display_name(properties)
-    }
+    ContactFormatter.build_contact("hubspot", id, properties)
   end
 
   defp format_contact(_), do: nil
-
-  defp format_display_name(properties) do
-    firstname = properties["firstname"] || ""
-    lastname = properties["lastname"] || ""
-    email = properties["email"] || ""
-
-    name = String.trim("#{firstname} #{lastname}")
-
-    if name == "" do
-      email
-    else
-      name
-    end
-  end
 end

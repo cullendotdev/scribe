@@ -104,10 +104,10 @@ defmodule SocialScribe.Crm.Suggestions do
 
   defp get_contact_field(_, _, _), do: nil
 
-  defp get_ai_gen_fn("hubspot"), do: :generate_hubspot_suggestions
-  defp get_ai_gen_fn("salesforce"), do: :generate_salesforce_suggestions
-
   defp get_ai_gen_fn(provider) do
-    raise "Suggestions not supported for CRM provider: #{provider}"
+    case Config.ai_suggestion_fn(provider) do
+      nil -> raise "Suggestions not supported for CRM provider: #{provider}"
+      fn_name -> fn_name
+    end
   end
 end

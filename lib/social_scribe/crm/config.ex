@@ -1,6 +1,7 @@
 defmodule SocialScribe.Crm.Config do
   @moduledoc """
   Central configuration and registry for supported CRM integrations.
+  Provides compile-time generated accessors and runtime configuration.
   """
 
   @providers %{
@@ -14,12 +15,33 @@ defmodule SocialScribe.Crm.Config do
       api_module: SocialScribe.HubspotApi,
       suggestions_module: SocialScribe.Crm.Suggestions,
       modal_component: SocialScribeWeb.MeetingLive.HubspotModalComponent,
+      modal_wrapper: :hubspot_modal,
       modal_id: "hubspot-modal",
       # Token refresh config
       token_url: Ueberauth.Strategy.Hubspot.OAuth.token_url(),
       oauth_strategy: Ueberauth.Strategy.Hubspot.OAuth,
       token_expiry_buffer_seconds: 300,
       refresh_threshold_minutes: 10,
+      # AI suggestion function name
+      ai_suggestion_fn: :generate_hubspot_suggestions,
+      # API fields to request (raw API field names)
+      api_fields: [
+        "firstname",
+        "lastname",
+        "email",
+        "phone",
+        "mobilephone",
+        "company",
+        "jobtitle",
+        "address",
+        "city",
+        "state",
+        "zip",
+        "country",
+        "website",
+        "hs_linkedin_url",
+        "twitterhandle"
+      ],
       fields: %{
         "firstname" => %{label: "First Name", internal_key: :firstname},
         "lastname" => %{label: "Last Name", internal_key: :lastname},
@@ -48,12 +70,32 @@ defmodule SocialScribe.Crm.Config do
       api_module: SocialScribe.SalesforceApi,
       suggestions_module: SocialScribe.Crm.Suggestions,
       modal_component: SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+      modal_wrapper: :salesforce_modal,
       modal_id: "salesforce-modal",
       # Token refresh config
       token_url: Ueberauth.Strategy.Salesforce.OAuth.token_url(),
       oauth_strategy: Ueberauth.Strategy.Salesforce.OAuth,
       token_expiry_buffer_seconds: 300,
       refresh_threshold_minutes: 10,
+      # AI suggestion function name
+      ai_suggestion_fn: :generate_salesforce_suggestions,
+      # API fields to request (raw API field names)
+      api_fields: [
+        "Id",
+        "FirstName",
+        "LastName",
+        "Email",
+        "Phone",
+        "MobilePhone",
+        "Account.Name",
+        "Title",
+        "MailingStreet",
+        "MailingCity",
+        "MailingState",
+        "MailingPostalCode",
+        "MailingCountry",
+        "Department"
+      ],
       fields: %{
         "FirstName" => %{label: "First Name", internal_key: :firstname},
         "LastName" => %{label: "Last Name", internal_key: :lastname},
@@ -74,10 +116,25 @@ defmodule SocialScribe.Crm.Config do
       initial: "M",
       color: "bg-blue-600",
       button_class: "bg-blue-600 hover:bg-blue-700",
+      modal_wrapper: nil,
       # Not used for meeting integration card
       icon_path: ""
     }
   }
+
+  # Generate provider-specific config accessor functions at compile time
+  # This creates functions like hubspot_config(), salesforce_config(), etc.
+  for {provider_name, _config} <- @providers do
+    func_name = String.to_atom("#{provider_name}_config")
+
+    @doc """
+    Returns the configuration for #{provider_name}.
+    Generated at compile time.
+    """
+    def unquote(func_name)() do
+      get(unquote(provider_name))
+    end
+  end
 
   @doc """
   Returns all configured providers.
@@ -96,11 +153,79 @@ defmodule SocialScribe.Crm.Config do
   def provider_names, do: Map.keys(@providers)
 
   @doc """
+  Returns the list of CRM providers (excludes google_meet).
+  """
+  def crm_provider_names do
+    Enum.filter(provider_names(), &(&1 != "google_meet"))
+  end
+
+  @doc """
   Gets the API implementation for a provider, allowing for environment overrides (mocks).
   """
   def api_impl(provider) do
     config = get(provider)
     env_key = String.to_atom("#{provider}_api")
     Application.get_env(:social_scribe, env_key, config.api_module)
+  end
+
+  @doc """
+  Returns the API fields list for a provider.
+  """
+  def api_fields(provider) do
+    case get(provider) do
+      %{api_fields: fields} -> fields
+      _ -> []
+    end
+  end
+
+  @doc """
+  Returns the AI suggestion function atom for a provider.
+  """
+  def ai_suggestion_fn(provider) do
+    case get(provider) do
+      %{ai_suggestion_fn: fn_name} -> fn_name
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Returns the modal wrapper function atom for a provider.
+  """
+  def modal_wrapper(provider) do
+    case get(provider) do
+      %{modal_wrapper: wrapper} -> wrapper
+      _ -> nil
+    end
+  end
+
+  # Mapping of legacy message atoms to {provider, message_type}
+  # This allows consolidating handle_info clauses while maintaining backward compatibility
+  @message_types %{
+    # Search messages
+    hubspot_search: {"hubspot", :search},
+    salesforce_search: {"salesforce", :search},
+    # Suggestion generation messages
+    generate_suggestions: {"hubspot", :generate_suggestions},
+    generate_salesforce_suggestions: {"salesforce", :generate_suggestions},
+    # Apply updates messages
+    apply_hubspot_updates: {"hubspot", :apply_updates},
+    apply_salesforce_updates: {"salesforce", :apply_updates}
+  }
+
+  @doc """
+  Returns the provider and message type for a legacy message atom.
+  Useful for consolidating handle_info clauses.
+  """
+  def provider_from_message(message_atom) when is_atom(message_atom) do
+    Map.get(@message_types, message_atom)
+  end
+
+  @doc """
+  Returns all message atoms for a given message type across all providers.
+  """
+  def messages_for_type(type) do
+    @message_types
+    |> Enum.filter(fn {_atom, {_provider, msg_type}} -> msg_type == type end)
+    |> Enum.map(fn {atom, _} -> atom end)
   end
 end

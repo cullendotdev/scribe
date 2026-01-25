@@ -51,6 +51,7 @@ defmodule SocialScribeWeb.CrmComponents do
 
   @doc """
   Renders a global CRM modal that handles provider-specific wrappers.
+  Uses Config to dynamically select the appropriate modal wrapper component.
   """
   attr :provider, :string, required: true
   attr :show, :boolean, default: false
@@ -60,29 +61,37 @@ defmodule SocialScribeWeb.CrmComponents do
 
   def crm_modal(assigns) do
     config = Config.get(assigns.provider)
-    assigns = assign(assigns, :config, config)
+    modal_wrapper = Config.modal_wrapper(assigns.provider)
+
+    assigns =
+      assigns
+      |> assign(:config, config)
+      |> assign(:modal_wrapper, modal_wrapper)
 
     ~H"""
-    <%= if @provider == "hubspot" do %>
-      <.hubspot_modal id={"#{@provider}-modal-wrapper"} show={@show} on_cancel={@on_cancel}>
-        <.live_component
-          module={@config.modal_component}
-          id={"#{@provider}-modal"}
-          meeting={@meeting}
-          credential={@credential}
-          modal_id={"#{@provider}-modal-wrapper"}
-        />
-      </.hubspot_modal>
-    <% else %>
-      <.salesforce_modal id={"#{@provider}-modal-wrapper"} show={@show} on_cancel={@on_cancel}>
-        <.live_component
-          module={@config.modal_component}
-          id={"#{@provider}-modal"}
-          meeting={@meeting}
-          credential={@credential}
-          modal_id={"#{@provider}-modal-wrapper"}
-        />
-      </.salesforce_modal>
+    <%= case @modal_wrapper do %>
+      <% :hubspot_modal -> %>
+        <.hubspot_modal id={"#{@provider}-modal-wrapper"} show={@show} on_cancel={@on_cancel}>
+          <.live_component
+            module={@config.modal_component}
+            id={"#{@provider}-modal"}
+            meeting={@meeting}
+            credential={@credential}
+            modal_id={"#{@provider}-modal-wrapper"}
+          />
+        </.hubspot_modal>
+      <% :salesforce_modal -> %>
+        <.salesforce_modal id={"#{@provider}-modal-wrapper"} show={@show} on_cancel={@on_cancel}>
+          <.live_component
+            module={@config.modal_component}
+            id={"#{@provider}-modal"}
+            meeting={@meeting}
+            credential={@credential}
+            modal_id={"#{@provider}-modal-wrapper"}
+          />
+        </.salesforce_modal>
+      <% _ -> %>
+        <!-- No modal wrapper for this provider -->
     <% end %>
     """
   end

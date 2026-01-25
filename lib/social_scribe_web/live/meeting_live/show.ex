@@ -3,10 +3,6 @@ defmodule SocialScribeWeb.MeetingLive.Show do
 
   import SocialScribeWeb.PlatformLogo
   import SocialScribeWeb.ClipboardButton
-
-  alias SocialScribe.Meetings
-  alias SocialScribe.Automations
-  alias SocialScribe.Accounts
   import SocialScribeWeb.CrmComponents
 
   alias SocialScribe.Meetings
@@ -87,30 +83,29 @@ defmodule SocialScribeWeb.MeetingLive.Show do
   end
 
   # Generic CRM Event Handlers
+  # These use Config.provider_from_message to dynamically resolve the provider
+  # from legacy message atoms, consolidating provider-specific clauses into generic ones.
 
   @impl true
-  def handle_info({:hubspot_search, query, credential}, socket),
-    do: handle_crm_search("hubspot", query, credential, socket)
+  def handle_info({message_type, query, credential}, socket)
+      when message_type in [:hubspot_search, :salesforce_search] do
+    {provider, :search} = Config.provider_from_message(message_type)
+    handle_crm_search(provider, query, credential, socket)
+  end
 
   @impl true
-  def handle_info({:salesforce_search, query, credential}, socket),
-    do: handle_crm_search("salesforce", query, credential, socket)
+  def handle_info({message_type, contact, meeting, _credential}, socket)
+      when message_type in [:generate_suggestions, :generate_salesforce_suggestions] do
+    {provider, :generate_suggestions} = Config.provider_from_message(message_type)
+    handle_generate_suggestions(provider, contact, meeting, socket)
+  end
 
   @impl true
-  def handle_info({:generate_suggestions, contact, meeting, _credential}, socket),
-    do: handle_generate_suggestions("hubspot", contact, meeting, socket)
-
-  @impl true
-  def handle_info({:generate_salesforce_suggestions, contact, meeting, _credential}, socket),
-    do: handle_generate_suggestions("salesforce", contact, meeting, socket)
-
-  @impl true
-  def handle_info({:apply_hubspot_updates, updates, contact, credential}, socket),
-    do: handle_apply_crm_updates("hubspot", updates, contact, credential, socket)
-
-  @impl true
-  def handle_info({:apply_salesforce_updates, updates, contact, credential}, socket),
-    do: handle_apply_crm_updates("salesforce", updates, contact, credential, socket)
+  def handle_info({message_type, updates, contact, credential}, socket)
+      when message_type in [:apply_hubspot_updates, :apply_salesforce_updates] do
+    {provider, :apply_updates} = Config.provider_from_message(message_type)
+    handle_apply_crm_updates(provider, updates, contact, credential, socket)
+  end
 
   defp handle_crm_search(provider, query, credential, socket) do
     config = Config.get(provider)
