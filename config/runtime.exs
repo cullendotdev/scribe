@@ -17,21 +17,23 @@ import Config
 #
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
+host = System.get_env("PHX_HOST") || "localhost:4000"
+scheme = if host =~ "localhost", do: "http", else: "https"
 
 config :ueberauth, Ueberauth.Strategy.Google.OAuth,
   client_id: System.get_env("GOOGLE_CLIENT_ID"),
   client_secret: System.get_env("GOOGLE_CLIENT_SECRET"),
-  redirect_uri: System.get_env("GOOGLE_REDIRECT_URI")
+  redirect_uri: "#{scheme}://#{host}/auth/google/callback"
 
 config :ueberauth, Ueberauth.Strategy.LinkedIn.OAuth,
   client_id: System.get_env("LINKEDIN_CLIENT_ID"),
   client_secret: System.get_env("LINKEDIN_CLIENT_SECRET"),
-  redirect_uri: System.get_env("LINKEDIN_REDIRECT_URI")
+  redirect_uri: "#{scheme}://#{host}/auth/linkedin/callback"
 
 config :ueberauth, Ueberauth.Strategy.Facebook.OAuth,
   client_id: System.get_env("FACEBOOK_CLIENT_ID"),
   client_secret: System.get_env("FACEBOOK_CLIENT_SECRET"),
-  redirect_uri: System.get_env("FACEBOOK_REDIRECT_URI")
+  redirect_uri: "#{scheme}://#{host}/auth/facebook/callback"
 
 config :social_scribe, :recall_api_key, System.get_env("RECALL_API_KEY")
 config :social_scribe, :recall_region, System.get_env("RECALL_REGION")
@@ -40,12 +42,12 @@ config :social_scribe, :gemini_api_key, System.get_env("GEMINI_API_KEY")
 config :ueberauth, Ueberauth.Strategy.Hubspot.OAuth,
   client_id: System.get_env("HUBSPOT_CLIENT_ID"),
   client_secret: System.get_env("HUBSPOT_CLIENT_SECRET"),
-  redirect_uri: System.get_env("HUBSPOT_REDIRECT_URI")
+  redirect_uri: "#{scheme}://#{host}/auth/hubspot/callback"
 
 config :ueberauth, Ueberauth.Strategy.Salesforce.OAuth,
   client_id: System.get_env("SALESFORCE_CLIENT_ID"),
   client_secret: System.get_env("SALESFORCE_CLIENT_SECRET"),
-  redirect_uri: System.get_env("SALESFORCE_REDIRECT_URI")
+  redirect_uri: "#{scheme}://#{host}/auth/salesforce/callback"
 
 if System.get_env("PHX_SERVER") do
   config :social_scribe, SocialScribeWeb.Endpoint, server: true
