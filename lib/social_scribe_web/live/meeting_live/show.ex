@@ -82,7 +82,25 @@ defmodule SocialScribeWeb.MeetingLive.Show do
     {:noreply, socket}
   end
 
-  # Generic CRM Event Handlers
+  # Unified CRM Event Handlers
+  # New format from CrmModalComponent: {:crm_search, provider, query, credential}
+
+  @impl true
+  def handle_info({:crm_search, provider, query, credential}, socket) do
+    handle_crm_search(provider, query, credential, socket)
+  end
+
+  @impl true
+  def handle_info({:crm_generate_suggestions, provider, contact, meeting, _credential}, socket) do
+    handle_generate_suggestions(provider, contact, meeting, socket)
+  end
+
+  @impl true
+  def handle_info({:crm_apply_updates, provider, updates, contact, credential}, socket) do
+    handle_apply_crm_updates(provider, updates, contact, credential, socket)
+  end
+
+  # Legacy CRM Event Handlers (backward compatibility with old modal components and tests)
   # These use Config.provider_from_message to dynamically resolve the provider
   # from legacy message atoms, consolidating provider-specific clauses into generic ones.
 

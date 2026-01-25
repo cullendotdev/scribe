@@ -75,6 +75,7 @@ defmodule SocialScribeWeb.CrmComponents do
           <.live_component
             module={@config.modal_component}
             id={"#{@provider}-modal"}
+            provider={@provider}
             meeting={@meeting}
             credential={@credential}
             modal_id={"#{@provider}-modal-wrapper"}
@@ -85,6 +86,7 @@ defmodule SocialScribeWeb.CrmComponents do
           <.live_component
             module={@config.modal_component}
             id={"#{@provider}-modal"}
+            provider={@provider}
             meeting={@meeting}
             credential={@credential}
             modal_id={"#{@provider}-modal-wrapper"}

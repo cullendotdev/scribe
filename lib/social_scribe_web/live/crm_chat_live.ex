@@ -21,16 +21,6 @@ defmodule SocialScribeWeb.CrmChatLive do
 
   require Logger
 
-  # Supported providers mapping to their implementation modules.
-  # We look up the configured module to allow mocking in tests.
-  defp supported_providers do
-    %{
-      "salesforce" =>
-        Application.get_env(:social_scribe, :salesforce_api, SocialScribe.SalesforceApi),
-      "hubspot" => Application.get_env(:social_scribe, :hubspot_api, SocialScribe.HubspotApi)
-    }
-  end
-
   def mount(_params, session, socket) do
     socket =
       case session do
@@ -41,78 +31,60 @@ defmodule SocialScribeWeb.CrmChatLive do
           socket
       end
 
+    socket = assign(socket, default_assigns())
+
     if connected?(socket) && Map.get(socket.assigns, :current_user) do
-      creds = Accounts.list_user_credentials(socket.assigns.current_user)
+      user = socket.assigns.current_user
+      creds = Accounts.list_user_credentials(user)
 
       crm_creds =
         Enum.filter(creds, fn c -> c.provider in Config.provider_names() end)
 
-      # Load recent chat sessions
-      sessions = Chats.list_user_chat_sessions(socket.assigns.current_user.id)
-      user_meetings = Meetings.list_recent_user_meetings(socket.assigns.current_user)
+      # Load recent chat sessions and meetings
+      sessions = Chats.list_user_chat_sessions(user.id)
+      user_meetings = Meetings.list_recent_user_meetings(user)
 
       {:ok,
        assign(socket,
-         query: "",
-         contacts: [],
-         chat_history: [],
-         chat_session_id: nil,
          chat_sessions: sessions,
          user_meetings: user_meetings,
-         active_tab: "chat",
-         crm_creds: crm_creds,
-         searching: false,
-         loading_answer: false,
-         message: "",
-         show_mentions: false,
-         mention_query: "",
-         selected_contacts: [],
-         # Accumulated sources from all contacts mentioned in this session
-         accumulated_sources: [],
-         show_context_menu: false,
-         show_meeting_selector: false,
-         # Model selection
-         selected_model: "gemini-2.5-flash-lite",
-         show_model_selector: false,
-         form: to_form(%{"message" => ""}),
-         crm_search_status: %{},
-         search_id: 0,
-         highlighted_index: 0,
-         error_alert: nil,
-         collapsed: false,
-         delete_session_id: nil
+         crm_creds: crm_creds
        )}
     else
-      {:ok,
-       assign(socket,
-         query: "",
-         contacts: [],
-         chat_history: [],
-         chat_sessions: [],
-         chat_session_id: nil,
-         active_tab: "chat",
-         searching: false,
-         loading_answer: false,
-         message: "",
-         show_mentions: false,
-         mention_query: "",
-         selected_contacts: [],
-         accumulated_sources: [],
-         show_context_menu: false,
-         show_meeting_selector: false,
-         user_meetings: [],
-         selected_model: "gemini-2.5-flash-lite",
-         show_model_selector: false,
-         crm_creds: [],
-         form: to_form(%{"message" => ""}),
-         crm_search_status: %{},
-         search_id: 0,
-         highlighted_index: 0,
-         error_alert: nil,
-         collapsed: false,
-         delete_session_id: nil
-       )}
+      {:ok, socket}
     end
+  end
+
+  # Default assigns for the CRM Chat sidebar
+  defp default_assigns do
+    [
+      query: "",
+      contacts: [],
+      chat_history: [],
+      chat_sessions: [],
+      chat_session_id: nil,
+      user_meetings: [],
+      active_tab: "chat",
+      crm_creds: [],
+      searching: false,
+      loading_answer: false,
+      message: "",
+      show_mentions: false,
+      mention_query: "",
+      selected_contacts: [],
+      accumulated_sources: [],
+      show_context_menu: false,
+      show_meeting_selector: false,
+      selected_model: "gemini-2.5-flash-lite",
+      show_model_selector: false,
+      form: to_form(%{"message" => ""}),
+      crm_search_status: %{},
+      search_id: 0,
+      highlighted_index: 0,
+      error_alert: nil,
+      collapsed: false,
+      delete_session_id: nil
+    ]
   end
 
   def handle_event("toggle_collapse", _, socket) do
@@ -510,7 +482,7 @@ defmodule SocialScribeWeb.CrmChatLive do
 
       for cred <- socket.assigns.crm_creds do
         Task.start(fn ->
-          module = supported_providers()[cred.provider]
+          module = Config.api_impl(cred.provider)
 
           results =
             case module.search_contacts(cred, search_term) do
