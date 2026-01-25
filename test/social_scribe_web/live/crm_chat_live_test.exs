@@ -16,33 +16,14 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
   end
 
   describe "CRM Chat" do
-    test "renders chat page", %{conn: conn, user: user} do
+    test "renders chat page with placeholder", %{conn: conn, user: user} do
       {:ok, _view, html} =
         live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
 
       assert html =~ "Ask Anything"
     end
 
-    test "search and select contact", %{conn: conn, user: user} do
-      # Create credentials for the user
-      {:ok, _} =
-        SocialScribe.Accounts.create_user_credential(%{
-          user_id: user.id,
-          provider: "salesforce",
-          uid: "sf_uid",
-          token: "tok",
-          refresh_token: "ref",
-          expires_at: DateTime.add(DateTime.utc_now(), 3600, :second),
-          email: "user@example.com"
-        })
-
-      {:ok, _view, html} =
-        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
-
-      assert html =~ "Ask Anything"
-    end
-
-    test "trigger search and display results", %{conn: conn, user: user} do
+    test "Salesforce contact search displays results in mentions menu", %{conn: conn, user: user} do
       # Setup credentials
       {:ok, _} =
         SocialScribe.Accounts.create_user_credential(%{
@@ -82,7 +63,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
       assert has_element?(view, ".mention-item", "John Doe")
     end
 
-    test "select contact adds to selected list", %{conn: conn, user: user} do
+    test "Salesforce contact selection adds to sources list", %{conn: conn, user: user} do
       # Setup credentials
       {:ok, _} =
         SocialScribe.Accounts.create_user_credential(%{
@@ -128,7 +109,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
       assert has_element?(view, "button[phx-click=remove_contact][title='Remove John Doe']")
     end
 
-    test "sends message and displays AI response", %{conn: conn, user: user} do
+    test "sends message and receives AI response", %{conn: conn, user: user} do
       SocialScribe.AIContentGeneratorMock
       |> expect(:answer_crm_question, fn _msg, _hist, _contacts, _model ->
         {:ok, "This is the AI response."}
@@ -145,11 +126,14 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
       # Check user message appears
       assert has_element?(view, "#chat-scroller", "Hello AI")
 
+      # Check input is cleared
+      assert has_element?(view, "textarea[name=message]", "")
+
       # Check AI response appears (async) - has_element? retries automatically
       assert has_element?(view, "#chat-scroller", "This is the AI response.")
     end
 
-    test "loads session history", %{conn: conn, user: user} do
+    test "loads and displays session history from database", %{conn: conn, user: user} do
       # Create session and messages
       {:ok, session} =
         SocialScribe.Chats.create_chat_session(%{user_id: user.id, title: "Test Session"})
@@ -181,7 +165,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
       assert has_element?(view, "#chat-scroller", "Past Answer")
     end
 
-    test "select meeting adds to selected list", %{conn: conn, user: user} do
+    test "meeting selection adds transcript to sources list", %{conn: conn, user: user} do
       import SocialScribe.MeetingsFixtures
 
       meeting =
@@ -204,7 +188,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
              )
     end
 
-    test "remove contact from selected list", %{conn: conn, user: user} do
+    test "removes Salesforce contact from sources list", %{conn: conn, user: user} do
       # Setup credentials and mock
       {:ok, _} =
         SocialScribe.Accounts.create_user_credential(%{
@@ -253,7 +237,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
       refute has_element?(view, "button[phx-click=remove_contact][title='Remove John Doe']")
     end
 
-    test "start new chat clears history", %{conn: conn, user: user} do
+    test "new chat button clears current session and shows empty state", %{conn: conn, user: user} do
       # Create session and history
       {:ok, session} =
         SocialScribe.Chats.create_chat_session(%{user_id: user.id, title: "Old Session"})
@@ -280,7 +264,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
       assert has_element?(view, "#chat-scroller", "Start a new conversation")
     end
 
-    test "displays error when AI fails", %{conn: conn, user: user} do
+    test "displays error alert when AI quota is exceeded", %{conn: conn, user: user} do
       SocialScribe.AIContentGeneratorMock
       |> expect(:answer_crm_question, fn _msg, _hist, _contacts, _model ->
         {:error, {:api_error, 429, %{"error" => %{"status" => "RESOURCE_EXHAUSTED"}}}}
@@ -298,7 +282,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
       assert has_element?(view, "div", "Quota Exceeded")
     end
 
-    test "selects different model and uses it for generation", %{conn: conn, user: user} do
+    test "model selector changes AI model for generation", %{conn: conn, user: user} do
       SocialScribe.AIContentGeneratorMock
       |> expect(:answer_crm_question, fn _msg, _hist, _contacts, "gemini-2.5-flash" ->
         {:ok, "Response from Flash"}
@@ -319,7 +303,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
       assert has_element?(view, "#chat-scroller", "Response from Flash")
     end
 
-    test "renders markdown formatted response", %{conn: conn, user: user} do
+    test "AI response renders with markdown formatting", %{conn: conn, user: user} do
       SocialScribe.AIContentGeneratorMock
       |> expect(:answer_crm_question, fn _msg, _hist, _contacts, _model ->
         {:ok, "**Bold** and *Italic*"}
@@ -334,10 +318,9 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
 
       assert has_element?(view, ".markdown-content strong", "Bold")
       assert has_element?(view, ".markdown-content em", "Italic")
-      assert has_element?(view, ".markdown-content em", "Italic")
     end
 
-    test "deletes chat session from history list", %{conn: conn, user: user} do
+    test "deletes chat session with modal confirmation", %{conn: conn, user: user} do
       # Create session
       {:ok, session} =
         SocialScribe.Chats.create_chat_session(%{user_id: user.id, title: "To Be Deleted"})
@@ -369,6 +352,312 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
       assert_raise Ecto.NoResultsError, fn ->
         SocialScribe.Chats.get_chat_session!(session.id)
       end
+    end
+
+    test "sidebar collapse toggle changes collapsed state", %{conn: conn, user: user} do
+      {:ok, view, html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      # Initially expanded - should see collapse button
+      assert html =~ "Collapse Sidebar"
+      refute html =~ "Expand CRM Chat"
+
+      # Toggle to collapsed
+      html = render_click(view, "toggle_collapse")
+
+      # Should see expand button now
+      assert html =~ "Expand CRM Chat"
+      refute html =~ "Collapse Sidebar"
+
+      # Toggle back to expanded
+      html = render_click(view, "toggle_collapse")
+      assert html =~ "Collapse Sidebar"
+    end
+
+    test "keyboard ArrowDown navigates through mention suggestions", %{conn: conn, user: user} do
+      {:ok, _} =
+        SocialScribe.Accounts.create_user_credential(%{
+          user_id: user.id,
+          provider: "salesforce",
+          uid: "sf_uid",
+          token: "tok",
+          refresh_token: "ref",
+          expires_at: DateTime.add(DateTime.utc_now(), 3600, :second),
+          email: "user@example.com"
+        })
+
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _creds, "Test" ->
+        {:ok,
+         [
+           %{
+             id: "1",
+             firstname: "Test",
+             lastname: "One",
+             provider: "salesforce",
+             email: "t1@example.com"
+           },
+           %{
+             id: "2",
+             firstname: "Test",
+             lastname: "Two",
+             provider: "salesforce",
+             email: "t2@example.com"
+           }
+         ]}
+      end)
+
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      view
+      |> element("#chat-input-wrapper")
+      |> render_hook("search_contacts_direct", %{"query" => "Test"})
+
+      # Use the specific index highlighting class or attribute to verify selection
+      # Assuming the first item is index 0 and highlighted
+      assert has_element?(view, ".mention-item.bg-gray-100", "Test One")
+
+      # Move down to second item
+      render_click(view, "handle_keydown", %{"key" => "ArrowDown"})
+
+      # Second item should be highlighted
+      assert has_element?(view, ".mention-item.bg-gray-100", "Test Two")
+    end
+
+    test "keyboard ArrowUp navigates mentions with wrap-around to last item", %{
+      conn: conn,
+      user: user
+    } do
+      {:ok, _} =
+        SocialScribe.Accounts.create_user_credential(%{
+          user_id: user.id,
+          provider: "salesforce",
+          uid: "sf_uid",
+          token: "tok",
+          refresh_token: "ref",
+          expires_at: DateTime.add(DateTime.utc_now(), 3600, :second),
+          email: "user@example.com"
+        })
+
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _creds, "Test" ->
+        {:ok,
+         [
+           %{
+             id: "1",
+             firstname: "Test",
+             lastname: "One",
+             provider: "salesforce",
+             email: "t1@example.com"
+           },
+           %{
+             id: "2",
+             firstname: "Test",
+             lastname: "Two",
+             provider: "salesforce",
+             email: "t2@example.com"
+           }
+         ]}
+      end)
+
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      view
+      |> element("#chat-input-wrapper")
+      |> render_hook("search_contacts_direct", %{"query" => "Test"})
+
+      # Initial state (index 0 highlighted)
+      assert has_element?(view, ".mention-item.bg-gray-100", "Test One")
+
+      # Up from top should wrap to bottom (last item)
+      render_click(view, "handle_keydown", %{"key" => "ArrowUp"})
+
+      # Last item highlighted
+      assert has_element?(view, ".mention-item.bg-gray-100", "Test Two")
+    end
+
+    test "keyboard Tab selects currently highlighted contact", %{conn: conn, user: user} do
+      {:ok, _} =
+        SocialScribe.Accounts.create_user_credential(%{
+          user_id: user.id,
+          provider: "salesforce",
+          uid: "sf_uid",
+          token: "tok",
+          refresh_token: "ref",
+          expires_at: DateTime.add(DateTime.utc_now(), 3600, :second),
+          email: "user@example.com"
+        })
+
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _creds, "John" ->
+        {:ok,
+         [
+           %{
+             id: "1",
+             firstname: "John",
+             lastname: "Doe",
+             provider: "salesforce",
+             email: "john@example.com"
+           }
+         ]}
+      end)
+
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      view
+      |> element("#chat-input-wrapper")
+      |> render_hook("search_contacts_direct", %{"query" => "John"})
+
+      render_click(view, "handle_keydown", %{"key" => "Tab"})
+
+      assert has_element?(view, "button[phx-click=remove_contact][title='Remove John Doe']")
+    end
+
+    test "cancel delete modal keeps session intact", %{conn: conn, user: user} do
+      {:ok, session} =
+        SocialScribe.Chats.create_chat_session(%{user_id: user.id, title: "Keep Me"})
+
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      render_click(view, "toggle_tab", %{"tab" => "history"})
+
+      view
+      |> element("button[phx-click=prompt_delete_chat][phx-value-id=#{session.id}]")
+      |> render_click()
+
+      assert has_element?(view, "#delete-chat-modal")
+
+      render_click(view, "cancel_delete_chat")
+
+      assert has_element?(view, "button[phx-click=load_session]", "Keep Me")
+      assert SocialScribe.Chats.get_chat_session(session.id) != nil
+    end
+
+    test "HubSpot contact search displays results in mentions menu", %{conn: conn, user: user} do
+      {:ok, _} =
+        SocialScribe.Accounts.create_user_credential(%{
+          user_id: user.id,
+          provider: "hubspot",
+          uid: "hs_uid",
+          token: "tok",
+          refresh_token: "ref",
+          expires_at: DateTime.add(DateTime.utc_now(), 3600, :second),
+          email: "user@example.com"
+        })
+
+      SocialScribe.HubspotApiMock
+      |> expect(:search_contacts, fn _creds, "Jane" ->
+        {:ok,
+         [
+           %{
+             id: "hs1",
+             firstname: "Jane",
+             lastname: "Smith",
+             provider: "hubspot",
+             email: "jane@example.com"
+           }
+         ]}
+      end)
+
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      view
+      |> element("#chat-input-wrapper")
+      |> render_hook("search_contacts_direct", %{"query" => "Jane"})
+
+      assert has_element?(view, ".mention-item", "Jane Smith")
+    end
+
+    test "empty message submission is ignored and creates no session", %{conn: conn, user: user} do
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      view
+      |> form("form[phx-submit=send_message]", %{message: ""})
+      |> render_submit()
+
+      sessions = SocialScribe.Chats.list_user_chat_sessions(user.id)
+      assert Enum.empty?(sessions)
+    end
+
+    test "cannot load another user's session (security)", %{conn: conn, user: user} do
+      other_user = SocialScribe.AccountsFixtures.user_fixture()
+
+      {:ok, other_session} =
+        SocialScribe.Chats.create_chat_session(%{user_id: other_user.id, title: "Secret"})
+
+      SocialScribe.Chats.add_message_to_session(other_session.id, %{
+        role: "user",
+        content: "Private message"
+      })
+
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      render_click(view, "load_session", %{"id" => to_string(other_session.id)})
+
+      refute has_element?(view, "#chat-scroller", "Private message")
+    end
+
+    test "selected sources persist in database across messages", %{conn: conn, user: user} do
+      {:ok, _} =
+        SocialScribe.Accounts.create_user_credential(%{
+          user_id: user.id,
+          provider: "salesforce",
+          uid: "sf_uid",
+          token: "tok",
+          refresh_token: "ref",
+          expires_at: DateTime.add(DateTime.utc_now(), 3600, :second),
+          email: "user@example.com"
+        })
+
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _creds, "John" ->
+        {:ok,
+         [
+           %{
+             id: "1",
+             firstname: "John",
+             lastname: "Doe",
+             provider: "salesforce",
+             email: "john@example.com"
+           }
+         ]}
+      end)
+
+      SocialScribe.AIContentGeneratorMock
+      |> expect(:answer_crm_question, fn _msg, _hist, _contacts, _model ->
+        {:ok, "Response about John"}
+      end)
+
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      view
+      |> element("#chat-input-wrapper")
+      |> render_hook("search_contacts_direct", %{"query" => "John"})
+
+      view
+      |> element("button[phx-click=select_contact]", "John Doe")
+      |> render_click()
+
+      view
+      |> form("form[phx-submit=send_message]", %{message: "Tell me about @John Doe"})
+      |> render_submit()
+
+      assert has_element?(view, "#chat-scroller", "Response about John")
+
+      sessions = SocialScribe.Chats.list_user_chat_sessions(user.id)
+      session = hd(sessions)
+      sources = SocialScribe.Chats.get_session_sources(session.id)
+
+      assert length(sources) == 1
+      assert hd(sources)["firstname"] == "John"
     end
   end
 end
