@@ -13,15 +13,15 @@ Hooks.Clipboard = {
   },
 };
 
+/**
+ * MentionsHandler Hook
+ * Manages the @mention functionality in the chat textarea, including
+ * searching for contacts, selecting them, and maintaining sync with the backend.
+ */
 Hooks.MentionsHandler = {
   mounted() {
-    // Select the textarea inside the ignored container
-    this.input = this.el.querySelector("textarea");
-    if (!this.input) {
-      this.input = this.el;
-    }
+    this.input = this.el.querySelector("textarea") || this.el;
     this.activeMentions = [];
-
     this.syncMentions = () => {
       const text = this.input.value;
       const stillPresent = [];
@@ -82,6 +82,8 @@ Hooks.MentionsHandler = {
       }
     });
 
+    // Checks if the user is currently typing a mention.
+    // Triggers a contact search if a trailing '@' or '@query' is found.
     this.checkMentions = () => {
       const text = this.input.value;
       const regex = /@([^\s]*)$/;
@@ -97,6 +99,7 @@ Hooks.MentionsHandler = {
       }
     };
 
+    // Disables the submit button if the input is empty or just whitespace.
     this.toggleSubmitButton = () => {
       const text = this.input.value.trim();
       const submitBtn = this.el
@@ -107,6 +110,7 @@ Hooks.MentionsHandler = {
       }
     };
 
+    // Event listeners for real-time updates
     this.input.addEventListener("input", () => {
       this.syncMentions();
       this.checkMentions();
@@ -114,6 +118,7 @@ Hooks.MentionsHandler = {
     });
 
     this.input.addEventListener("keydown", (e) => {
+      // Shift + Enter to submit the form
       if (e.key === "Enter" && e.shiftKey) {
         e.preventDefault();
         const form = this.el.closest("form");
@@ -125,6 +130,7 @@ Hooks.MentionsHandler = {
         return;
       }
 
+      // Special handling for Backspace to delete entire mentions
       if (e.key === "Backspace") {
         const start = this.input.selectionStart;
         const end = this.input.selectionEnd;
@@ -151,8 +157,10 @@ Hooks.MentionsHandler = {
         }
       }
 
+      // Handle keyboard navigation when the mentions menu is open
       if (this.el.dataset.mentionsOpen === "true") {
         if (e.key === "Tab") {
+          // Select the currently highlighted mention
           e.preventDefault();
           const menu = document.getElementById("mentions-menu");
           if (menu) {
@@ -173,6 +181,7 @@ Hooks.MentionsHandler = {
       }
     });
 
+    // Mouse listener to handle clicking on items in the mentions menu.
     this.clickListener = (e) => {
       const item = e.target.closest(".mention-item");
       if (item && document.getElementById("mentions-menu")?.contains(item)) {
@@ -196,6 +205,7 @@ Hooks.MentionsHandler = {
   },
 };
 
+// SidebarResizer Hook - Enables draggable resizing for the CRM chat sidebar.
 Hooks.SidebarResizer = {
   mounted() {
     this.handle = this.el;
@@ -209,19 +219,21 @@ Hooks.SidebarResizer = {
       return;
     }
 
+    // Initializes the resizing process on mouse down.
     this.startResize = (e) => {
       e.preventDefault();
       this.isResizing = true;
       this.container.classList.add("resizing");
       document.body.style.userSelect = "none";
       document.body.style.cursor = "col-resize";
-      // Keep the handle visible while dragging
+
       this.handle.classList.add("bg-indigo-500", "opacity-100");
 
       document.addEventListener("mousemove", this.doResize);
       document.addEventListener("mouseup", this.stopResize);
     };
 
+    // Calculates and applies the new width during mouse movement.
     this.doResize = (e) => {
       if (
         !this.isResizing ||
@@ -230,7 +242,7 @@ Hooks.SidebarResizer = {
         return;
 
       // Calculate new width (Right Sidebar: Width = Window Width - Mouse X)
-      // Clamped between 300 and 800
+      // Clamped between 300px and 800px
       let newWidth = window.innerWidth - e.clientX;
       if (newWidth < 300) newWidth = 300;
       if (newWidth > 800) newWidth = 800;
@@ -238,6 +250,7 @@ Hooks.SidebarResizer = {
       this.container.style.width = `${newWidth}px`;
     };
 
+    // Cleans up listeners and styles after resizing is finished.
     this.stopResize = () => {
       this.isResizing = false;
       this.container.classList.remove("resizing");
@@ -256,7 +269,7 @@ Hooks.SidebarResizer = {
     if (this.handle) {
       this.handle.removeEventListener("mousedown", this.startResize);
     }
-    // Cleanup global listeners just in case
+    // Cleanup global listeners
     document.removeEventListener("mousemove", this.doResize);
     document.removeEventListener("mouseup", this.stopResize);
   },
