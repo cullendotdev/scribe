@@ -583,24 +583,34 @@ defmodule SocialScribeWeb.CrmChatLive do
   Returns the initials (up to 2 characters) for a contact.
   For meetings, returns "M". For contacts, returns first letters of first and last name.
   """
+  def contact_initials(%{provider: "google_meet"}), do: "M"
+
   def contact_initials(contact) when is_map(contact) do
-    provider = contact[:provider] || contact["provider"]
+    first = contact[:firstname] || contact["firstname"]
+    last = contact[:lastname] || contact["lastname"]
+    name = contact[:name] || contact["name"]
 
-    if provider == "google_meet" do
-      "M"
-    else
-      first = contact[:firstname] || contact["firstname"] || ""
-      last = contact[:lastname] || contact["lastname"] || ""
+    initials =
+      cond do
+        (first && first != "") || (last && last != "") ->
+          [first || "", last || ""]
+          |> Enum.map(&String.first/1)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.join()
 
-      initials =
-        [first, last]
-        |> Enum.map(&String.first/1)
-        |> Enum.reject(&is_nil/1)
-        |> Enum.join()
-        |> String.upcase()
+        name && name != "" ->
+          name
+          |> String.split()
+          |> Enum.map(&String.first/1)
+          |> Enum.take(2)
+          |> Enum.join()
 
-      if initials == "", do: "?", else: String.slice(initials, 0, 2)
-    end
+        true ->
+          "?"
+      end
+      |> String.upcase()
+
+    if initials == "", do: "?", else: String.slice(initials, 0, 2)
   end
 
   def contact_initials(_), do: "?"
@@ -631,6 +641,77 @@ defmodule SocialScribeWeb.CrmChatLive do
 
   def contact_full_name(_), do: "Unknown"
 
+  attr :contact, :map, required: true
+  attr :class, :string, default: nil
+  attr :show_initials, :boolean, default: true
+
+  def contact_icon(assigns) do
+    # Normalize contact map to support both atom and string keys
+    contact = assigns.contact
+    provider = contact[:provider] || contact["provider"]
+    # For display logic
+    assigns = assign(assigns, :provider, provider)
+    assigns = assign(assigns, :initials, contact_initials(contact))
+
+    ~H"""
+    <div class={[
+      "rounded-full flex items-center justify-center font-bold text-white shrink-0",
+      if(@class, do: @class, else: "w-5 h-5 text-[10px]"),
+      provider_color(@provider)
+    ]}>
+      <%= if @provider == "google_meet" do %>
+        <.icon name="hero-video-camera" class="w-[60%] h-[60%] text-white" />
+      <% else %>
+        <%= if @show_initials do %>
+          <span>
+            {@initials}
+          </span>
+        <% end %>
+      <% end %>
+    </div>
+    """
+  end
+
+  attr :contact, :map, required: true
+  attr :mode, :atom, default: :inline, values: [:inline, :block]
+
+  def contact_chip(assigns) do
+    # Normalize contact map
+    contact = assigns.contact
+    provider = contact[:provider] || contact["provider"]
+    # id is not used in display logic
+
+    # Handle both full contact maps and simple source tuples
+    name =
+      case contact do
+        %{firstname: _, lastname: _} -> "#{contact.firstname} #{contact.lastname}"
+        %{"firstname" => _, "lastname" => _} -> "#{contact["firstname"]} #{contact["lastname"]}"
+        # meeting
+        %{title: title} -> title
+        # meeting
+        %{"title" => title} -> title
+        # Fallback for simple map constructed in view
+        %{name: name} -> name
+        _ -> "Unknown"
+      end
+
+    assigns =
+      assign(assigns,
+        provider: provider,
+        name: name
+      )
+
+    ~H"""
+    <span class={[
+      "inline-flex items-center gap-1 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle",
+      if(@mode == :inline, do: "bg-white/80", else: "bg-gray-100")
+    ]}>
+      <.contact_icon contact={@contact} class="w-4 h-4 text-[7px]" />
+      <span class="text-gray-700 text-sm">{@name}</span>
+    </span>
+    """
+  end
+
   attr :content, :string, required: true
   attr :sources, :list, default: []
 
@@ -646,20 +727,10 @@ defmodule SocialScribeWeb.CrmChatLive do
         <%= case part do %>
           <% {:text, text} -> %>
             {render_inline_markdown(text)}
-          <% {:contact, provider, _id, name} -> %>
-            <span class="inline-flex items-center gap-1 bg-gray-100 rounded-lg pl-0.5 pr-2 py-0.5 align-middle">
-              <span class={"w-4 h-4 rounded-full inline-flex items-center justify-center text-[7px] text-white font-bold #{provider_color(provider)}"}>
-                {initials_from_name(name)}
-              </span>
-              <span class="text-gray-700 text-sm">{name}</span>
-            </span>
-          <% {:meeting, _id, title} -> %>
-            <span class="inline-flex items-center gap-1 bg-gray-100 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle">
-              <span class="w-4 h-4 rounded-full inline-flex items-center justify-center bg-blue-600">
-                <.icon name="hero-video-camera" class="w-2.5 h-2.5 text-white" />
-              </span>
-              <span class="text-gray-700 text-sm">{title}</span>
-            </span>
+          <% {:contact, provider, id, name} -> %>
+            <.contact_chip contact={%{provider: provider, id: id, name: name}} mode={:block} />
+          <% {:meeting, id, title} -> %>
+            <.contact_chip contact={%{provider: "google_meet", id: id, title: title}} mode={:block} />
         <% end %>
       <% end %>
     </div>
@@ -686,14 +757,6 @@ defmodule SocialScribeWeb.CrmChatLive do
   end
 
   # Extracts initials (max 2 chars) from a full name string
-  defp initials_from_name(name) do
-    name
-    |> String.split()
-    |> Enum.map(&String.first/1)
-    |> Enum.take(2)
-    |> Enum.join()
-    |> String.upcase()
-  end
 
   # Unified component for rendering content with source tokens (works for both user and assistant messages)
   attr :content, :string, required: true
@@ -709,20 +772,10 @@ defmodule SocialScribeWeb.CrmChatLive do
         <%= case part do %>
           <% {:text, text} -> %>
             {text}
-          <% {:contact, provider, _id, name} -> %>
-            <span class="inline-flex items-center gap-1 bg-white/80 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle">
-              <span class={"w-4 h-4 rounded-full inline-flex items-center justify-center text-[7px] text-white font-bold #{provider_color(provider)}"}>
-                {initials_from_name(name)}
-              </span>
-              <span class="text-gray-700 text-sm">{name}</span>
-            </span>
-          <% {:meeting, _id, title} -> %>
-            <span class="inline-flex items-center gap-1 bg-white/80 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle">
-              <span class="w-4 h-4 rounded-full inline-flex items-center justify-center bg-blue-600">
-                <.icon name="hero-video-camera" class="w-2.5 h-2.5 text-white" />
-              </span>
-              <span class="text-gray-700 text-sm">{title}</span>
-            </span>
+          <% {:contact, provider, id, name} -> %>
+            <.contact_chip contact={%{provider: provider, id: id, name: name}} mode={:inline} />
+          <% {:meeting, id, title} -> %>
+            <.contact_chip contact={%{provider: "google_meet", id: id, title: title}} mode={:inline} />
         <% end %>
       <% end %>
     </span>

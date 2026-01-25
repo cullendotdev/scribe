@@ -87,20 +87,7 @@
                 <div class="mt-2 flex items-center gap-2 text-xs text-gray-400">
                   <span>Sources</span>
                   <%= for contact <- msg.sources do %>
-                    <% provider = contact[:provider] || contact["provider"] %>
-                    <div
-                      class={[
-                        "w-5 h-5 rounded-full flex items-center justify-center text-[9px] text-white font-bold cursor-default",
-                        provider_color(provider)
-                      ]}
-                      title={contact_full_name(contact)}
-                    >
-                      <%= if provider == "google_meet" do %>
-                        <.icon name="hero-video-camera" class="w-3 h-3 text-white" />
-                      <% else %>
-                        {contact_initials(contact)}
-                      <% end %>
-                    </div>
+                    <.contact_icon contact={contact} class="w-4 h-4 text-[7px] cursor-default" />
                   <% end %>
                 </div>
               <% end %>
@@ -303,19 +290,10 @@
                       phx-click="remove_contact"
                       phx-value-id={contact.id}
                       phx-value-provider={contact.provider}
-                      class={[
-                        "w-5 h-5 rounded-full overflow-hidden ring-1 ring-white shadow-sm flex items-center justify-center transition-transform hover:scale-110",
-                        provider_color(contact.provider)
-                      ]}
                       title={"Remove #{contact.firstname} #{contact.lastname}"}
+                      class="ring-1 ring-white shadow-sm transition-transform hover:scale-110 rounded-full"
                     >
-                      <%= if contact.provider == "google_meet" do %>
-                        <.icon name="hero-video-camera" class="w-3 h-3 text-white" />
-                      <% else %>
-                        <span class="text-[9px] text-white font-bold">
-                          {contact_initials(contact)}
-                        </span>
-                      <% end %>
+                      <.contact_icon contact={contact} class="w-4 h-4 text-[7px]" />
                     </button>
                   <% end %>
                 </div>
@@ -454,12 +432,7 @@
                           )
                         ]}
                       >
-                        <div class={[
-                          "w-5 h-5 rounded-full flex items-center justify-center text-[10px] text-white font-bold shrink-0",
-                          provider_color(contact.provider)
-                        ]}>
-                          {provider_initial(contact.provider)}
-                        </div>
+                        <.contact_icon contact={contact} class="w-4 h-4 text-[7px]" />
                         <div class="truncate">
                           <span class="font-medium text-gray-900">
                             {contact.firstname} {contact.lastname}
