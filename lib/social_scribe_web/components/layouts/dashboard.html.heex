@@ -1,67 +1,73 @@
-<header class="">
-  <div class="flex items-center justify-between border-b border-zinc-100 py-3 text-sm px-2 sm:px-4 md:px-6 lg:px-8">
-    <div class="flex items-center gap-4">
-      <a href={~p"/dashboard"} class="flex items-center gap-2">
-        <span class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-indigo-800 bg-clip-text text-transparent">
-          social scribe
-        </span>
-      </a>
-    </div>
+<div class="h-screen flex flex-col overflow-hidden">
+  <header class="shrink-0 bg-white z-20 relative shadow-sm">
+    <div class="flex items-center justify-between border-b border-zinc-100 py-3 text-sm px-2 sm:px-4 md:px-6 lg:px-8">
+      <div class="flex items-center gap-4">
+        <a href={~p"/dashboard"} class="flex items-center gap-2">
+          <span class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-indigo-800 bg-clip-text text-transparent">
+            social scribe
+          </span>
+        </a>
+      </div>
 
-    <div class="relative">
-      <button
-        phx-click={JS.toggle(to: "#user-dropdown")}
-        class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-[#5f6368] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600"
-        aria-haspopup="true"
-      >
-        <.icon name="hero-user" class="size-6" />
-      </button>
-
-      <div
-        id="user-dropdown"
-        class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none hidden z-50"
-        role="menu"
-        aria-orientation="vertical"
-        aria-labelledby="user-menu-button"
-        tabindex="-1"
-        phx-click-away={JS.hide(to: "#user-dropdown")}
-      >
-        <div class="px-4 py-2 text-sm text-gray-700">
-          <p class="font-medium">Signed in as</p>
-          <p class="truncate">{@current_user.email}</p>
-        </div>
-        <div class="border-t border-gray-100"></div>
-        <.link
-          href={~p"/users/log_out"}
-          method="delete"
-          class="block px-4 py-2 text-sm text-destructive hover:bg-gray-100"
-          role="menuitem"
-          tabindex="-1"
-          id="user-menu-item-2"
+      <div class="relative">
+        <button
+          phx-click={JS.toggle(to: "#user-dropdown")}
+          class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-[#5f6368] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600"
+          aria-haspopup="true"
         >
-          Logout
-        </.link>
+          <.icon name="hero-user" class="size-6" />
+        </button>
+
+        <div
+          id="user-dropdown"
+          class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none hidden z-50"
+          role="menu"
+          aria-orientation="vertical"
+          aria-labelledby="user-menu-button"
+          tabindex="-1"
+          phx-click-away={JS.hide(to: "#user-dropdown")}
+        >
+          <div class="px-4 py-2 text-sm text-gray-700">
+            <p class="font-medium">Signed in as</p>
+            <p class="truncate">{@current_user.email}</p>
+          </div>
+          <div class="border-t border-gray-100"></div>
+          <.link
+            href={~p"/users/log_out"}
+            method="delete"
+            class="block px-4 py-2 text-sm text-destructive hover:bg-gray-100"
+            role="menuitem"
+            tabindex="-1"
+            id="user-menu-item-2"
+          >
+            Logout
+          </.link>
+        </div>
       </div>
     </div>
-  </div>
-</header>
+  </header>
 
-<div class="flex h-screen bg-[#f1f3f4] relative">
-  <.sidebar
-    base_path={~p"/dashboard"}
-    current_path={@current_path}
-    links={[
-      {"Home", "hero-home", ~p"/dashboard"},
-      {"Meetings", "hero-calendar", ~p"/dashboard/meetings"},
-      {"Automations", "hero-rocket-launch", ~p"/dashboard/automations"},
-      {"Settings", "hero-cog-6-tooth", ~p"/dashboard/settings"}
-    ]}
-  />
+  <div class="flex flex-1 overflow-hidden bg-[#f1f3f4] relative">
+    <.sidebar
+      base_path={~p"/dashboard"}
+      current_path={@current_path}
+      links={[
+        {"Home", "hero-home", ~p"/dashboard"},
+        {"Meetings", "hero-calendar", ~p"/dashboard/meetings"},
+        {"Automations", "hero-rocket-launch", ~p"/dashboard/automations"},
+        {"Settings", "hero-cog-6-tooth", ~p"/dashboard/settings"}
+      ]}
+    />
 
-  <div class="flex-1 overflow-auto">
-    <main class="px-4 py-8">
-      <.flash_group flash={@flash} />
-      {@inner_content}
-    </main>
+    <div class="flex-1 overflow-auto relative z-0">
+      <main class="px-4 py-8">
+        <.flash_group flash={@flash} />
+        {@inner_content}
+      </main>
+    </div>
+
+    <div id="crm-chat-sidebar-container" class="w-[400px] bg-white border-l border-gray-200 shadow-lg flex flex-col z-10 shrink-0 transform transition-transform duration-300 ease-in-out translate-x-0 h-full">
+      <%= live_render(@socket, SocialScribeWeb.CrmChatLive, id: "crm-chat-sidebar", session: %{"user_id" => @current_user.id}, container: {:div, style: "height: 100%"}) %>
+    </div>
   </div>
 </div>

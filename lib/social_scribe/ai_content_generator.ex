@@ -157,6 +157,109 @@ defmodule SocialScribe.AIContentGenerator do
     end
   end
 
+  @impl SocialScribe.AIContentGeneratorApi
+  def answer_crm_question(question, conversation_history, contacts_data, model \\ nil) do
+    selected_model = model || @gemini_model
+    conversation = format_conversation_history(conversation_history)
+    sources_info = format_multi_source_contacts(contacts_data)
+
+    system_context =
+      if sources_info != "" do
+        """
+        You are a helpful CRM assistant with access to contact information from one or more CRM sources.
+        You can answer questions about contacts, compare information across different sources, and provide insights.
+
+        Available Contact Sources:
+        #{sources_info}
+        """
+      else
+        """
+        You are a helpful CRM assistant. The user hasn't tagged any specific contacts yet.
+        Suggest they tag a contact using @Name to get specific information.
+        """
+      end
+
+    prompt =
+      if conversation != "" do
+        """
+        #{system_context}
+
+        Conversation History:
+        #{conversation}
+
+        Current User Question:
+        #{question}
+
+        Please answer based on the available contact data and conversation context.
+        If comparing contacts, clearly reference each source.
+        If information is not available, say so politely.
+        """
+      else
+        """
+        #{system_context}
+
+        User Question:
+        #{question}
+
+        Please answer based on the available contact data.
+        If information is not available, say so politely.
+        """
+      end
+
+    call_gemini(prompt, selected_model)
+  end
+
+  defp format_conversation_history(history) when is_list(history) do
+    history
+    |> Enum.map(fn msg ->
+      role = if msg[:role] == :user or msg[:role] == "user", do: "User", else: "Assistant"
+      "#{role}: #{msg[:content]}"
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp format_conversation_history(_), do: ""
+
+  defp format_multi_source_contacts(contacts) when is_list(contacts) and length(contacts) > 0 do
+    contacts
+    |> Enum.with_index(1)
+    |> Enum.map(fn {contact, idx} ->
+      provider = contact[:provider] || contact["provider"] || "unknown"
+
+      if provider == "google_meet" do
+        meeting_data = contact[:meeting] || contact["meeting"]
+
+        prompt =
+          case meeting_data do
+            %SocialScribe.Meetings.Meeting{} = m ->
+              case SocialScribe.Meetings.generate_prompt_for_meeting(m) do
+                {:ok, p} -> p
+                _ -> "Meeting transcript unavailable."
+              end
+
+            _ ->
+              "Meeting data unavailable."
+          end
+
+        """
+        [Source #{idx}: Google Meet Transcript]
+        #{prompt}
+        """
+      else
+        name =
+          "#{contact[:firstname] || contact["firstname"]} #{contact[:lastname] || contact["lastname"]}"
+
+        """
+        [Source #{idx}: #{String.capitalize(provider)} - #{name}]
+        #{Jason.encode!(contact, pretty: true)}
+        """
+      end
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp format_multi_source_contacts(_), do: ""
+
   defp parse_suggestions(response) do
     # Clean up the response - remove markdown code blocks if present
     cleaned =
@@ -192,13 +295,13 @@ defmodule SocialScribe.AIContentGenerator do
     end
   end
 
-  defp call_gemini(prompt_text) do
+  defp call_gemini(prompt_text, model \\ @gemini_model) do
     api_key = Application.get_env(:social_scribe, :gemini_api_key)
 
     if is_nil(api_key) or api_key == "" do
       {:error, {:config_error, "Gemini API key is missing - set GEMINI_API_KEY env var"}}
     else
-      path = "/#{@gemini_model}:generateContent?key=#{api_key}"
+      path = "/#{model}:generateContent?key=#{api_key}"
 
       payload = %{
         contents: [
