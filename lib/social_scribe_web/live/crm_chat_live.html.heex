@@ -1,0 +1,592 @@
+<%= if @collapsed do %>
+  <div
+    class="h-full w-12 flex flex-col items-center py-4 bg-white border-l border-gray-100 shadow-sm group hover:bg-gray-50 transition-colors cursor-pointer"
+    phx-click={
+      JS.push("toggle_collapse")
+      |> JS.toggle_class("collapsed-sidebar", to: "#crm-chat-sidebar-container")
+    }
+    title="Expand CRM Chat"
+  >
+    <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 transition-transform group-hover:scale-110">
+      <.icon name="hero-chat-bubble-left-right" class="w-5 h-5" />
+    </div>
+    <div class="flex-1 flex items-center justify-center">
+      <span class="rotate-90 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">
+        CRM Assistant
+      </span>
+    </div>
+    <div class="mt-auto p-2 text-gray-400 hover:text-indigo-600 transition-colors">
+      <.icon name="hero-chevron-double-left" class="w-5 h-5" />
+    </div>
+  </div>
+<% else %>
+  <div class="h-full flex flex-col bg-white overflow-hidden relative" id="crm-chat-container">
+    <div
+      id="sidebar-resize-handle"
+      phx-hook="SidebarResizer"
+      class="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-col-resize z-[100] hover:bg-indigo-500/50 transition-colors"
+    >
+    </div>
+    <!-- Header -->
+    <div class="p-4 flex items-center justify-between shrink-0 border-b border-gray-50">
+      <h2 class="text-lg font-semibold text-gray-900">Ask Anything</h2>
+      <div class="flex items-center gap-2">
+        <button
+          phx-click={
+            JS.push("toggle_collapse")
+            |> JS.toggle_class("collapsed-sidebar", to: "#crm-chat-sidebar-container")
+          }
+          class="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+          title="Collapse Sidebar"
+        >
+          <.icon name="hero-chevron-double-right" class="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+
+    <div class="px-4 py-3 flex items-center justify-between shrink-0">
+      <div class="flex space-x-1 p-1 rounded-lg">
+        <button
+          phx-click="toggle_tab"
+          phx-value-tab="chat"
+          class={[
+            "flex items-center justify-center px-3 py-1 text-sm font-semibold rounded-lg transition-all",
+            if(@active_tab == "chat",
+              do: "bg-gray-100 text-gray-900",
+              else: "text-gray-400 hover:text-gray-700"
+            )
+          ]}
+        >
+          Chat
+        </button>
+        <button
+          phx-click="toggle_tab"
+          phx-value-tab="history"
+          class={[
+            "flex items-center justify-center px-3 py-1 text-sm font-semibold rounded-lg transition-all",
+            if(@active_tab == "history",
+              do: "bg-gray-100 text-gray-900",
+              else: "text-gray-400 hover:text-gray-700"
+            )
+          ]}
+        >
+          History
+        </button>
+      </div>
+      <div class="flex items-center gap-2">
+        <button phx-click="new_chat" class="text-gray-400 hover:text-gray-600" title="New Chat">
+          <.icon name="hero-plus" class="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+    
+<!-- Content Area -->
+    <div class="flex-1 flex flex-col overflow-hidden relative">
+      <%= if @active_tab == "chat" do %>
+        <!-- Chat History -->
+        <div class="flex-1 overflow-y-auto px-4 py-2 space-y-6 flex flex-col" id="chat-scroller">
+          <!-- Date Separator -->
+          <div class="flex items-center justify-center shrink-0">
+            <div class="border-t border-gray-100 w-full"></div>
+            <span class="px-3 text-[10px] text-gray-400 bg-white shrink-0 uppercase tracking-wider">
+              <%= if Enum.empty?(@chat_history) do %>
+                TODAY
+              <% else %>
+                {List.first(@chat_history).inserted_at |> Calendar.strftime("%I:%M%P - %B %d, %Y")}
+              <% end %>
+            </span>
+            <div class="border-t border-gray-100 w-full"></div>
+          </div>
+
+          <%= if Enum.empty?(@chat_history) do %>
+            <div class="flex flex-1 items-center justify-center text-gray-400 min-h-0">
+              <p class="text-center text-sm px-8">
+                Start a new conversation by asking a question or tagging a contact!
+              </p>
+            </div>
+          <% end %>
+
+          <%= for msg <- @chat_history do %>
+            <div class="flex flex-col space-y-1 shrink-0">
+              <%= if msg.role == :assistant do %>
+                <div class="text-sm text-gray-800 leading-relaxed">
+                  <.markdown content={msg.content} sources={Map.get(msg, :sources, [])} />
+                </div>
+                <%= if Map.get(msg, :sources) && msg.sources != [] do %>
+                  <div class="mt-2 flex items-center gap-2 text-xs text-gray-400">
+                    <span>Sources</span>
+                    <%= for contact <- msg.sources do %>
+                      <.contact_icon contact={contact} class="w-4 h-4 text-[7px] cursor-default" />
+                    <% end %>
+                  </div>
+                <% end %>
+              <% else %>
+                <!-- User Message -->
+                <div class="self-end bg-slate-100 text-slate-800 rounded-xl rounded-tr-none px-4 py-3 text-sm max-w-[90%]">
+                  <.render_with_tokens content={msg.content} sources={Map.get(msg, :sources, [])} />
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+
+          <%= if @loading_answer do %>
+            <div class="flex space-x-1 pt-2 shrink-0">
+              <div class="w-2 h-2 bg-gray-300 rounded-full animate-bounce"></div>
+              <div class="w-2 h-2 bg-gray-300 rounded-full animate-bounce delay-75"></div>
+              <div class="w-2 h-2 bg-gray-300 rounded-full animate-bounce delay-150"></div>
+            </div>
+          <% end %>
+
+          <%= if @error_alert do %>
+            <div class={[
+              "shrink-0 rounded-xl p-4 mb-2 border shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300 relative",
+              case @error_alert.type do
+                :error -> "bg-red-50 border-red-100"
+                _ -> "bg-amber-50 border-amber-100"
+              end
+            ]}>
+              <button
+                phx-click="dismiss_error"
+                class="absolute top-2 right-2 p-1 rounded-full hover:bg-black/5 transition-colors"
+                title="Dismiss"
+              >
+                <.icon
+                  name="hero-x-mark"
+                  class={
+                    case @error_alert.type do
+                      :error -> "w-4 h-4 text-red-500"
+                      _ -> "w-4 h-4 text-amber-600"
+                    end
+                  }
+                />
+              </button>
+
+              <div class="flex gap-3 items-center">
+                <div class="shrink-0">
+                  <%= case @error_alert.type do %>
+                    <% :error -> %>
+                      <.icon name="hero-exclamation-circle" class="w-5 h-5 text-red-600" />
+                    <% _ -> %>
+                      <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-amber-600" />
+                  <% end %>
+                </div>
+                <div class="flex-1">
+                  <h3 class={[
+                    "text-sm font-semibold mb-0.5",
+                    case @error_alert.type do
+                      :error -> "text-red-900"
+                      _ -> "text-amber-900"
+                    end
+                  ]}>
+                    {@error_alert.title}
+                  </h3>
+                  <div class={[
+                    "text-sm leading-relaxed",
+                    case @error_alert.type do
+                      :error -> "text-red-800"
+                      _ -> "text-amber-800"
+                    end
+                  ]}>
+                    <p class="inline">{@error_alert.message}</p>
+                    <%= if @error_alert.suggestion do %>
+                      <p class="font-medium inline">
+                        {@error_alert.suggestion}
+                      </p>
+                    <% end %>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+        
+<!-- Input Area -->
+        <div class="p-4 bg-white shrink-0 z-10">
+          <div class="rounded-2xl p-3 relative ring-1 ring-gray-400 focus-within:ring-blue-400">
+            <div class="relative inline-block">
+              <button
+                phx-click={JS.toggle(to: "#context-menu")}
+                class="flex items-center space-x-1 text-[11px] font-medium text-gray-600 border border-gray-300 rounded-lg px-1.5 py-1 mb-3 hover:bg-gray-100 transition-all group"
+                type="button"
+              >
+                <span class="text-gray-500 ">
+                  <.icon name="hero-at-symbol" class="w-4 h-4" />
+                </span>
+                <span class="text-[11px] text-gray-500">Add context</span>
+              </button>
+
+              <div
+                id="context-menu"
+                class="hidden absolute bottom-full left-0 mb-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 p-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200"
+                phx-click-away={JS.hide(to: "#context-menu")}
+              >
+                <button
+                  type="button"
+                  phx-click={
+                    JS.toggle(to: "#meeting-selector-list-container")
+                    |> JS.hide(to: "#context-menu")
+                  }
+                  class="w-full text-left px-3 py-2.5 rounded-lg text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all flex items-center gap-2 group"
+                >
+                  <.icon
+                    name="hero-video-camera"
+                    class="w-4 h-4 text-gray-400 group-hover:text-blue-500"
+                  />
+                  <span>Add meeting transcript</span>
+                </button>
+                <button
+                  type="button"
+                  phx-click={
+                    JS.focus(to: "textarea[name=message]") |> JS.hide(to: "#context-menu")
+                  }
+                  onclick="const ta = document.querySelector('textarea[name=message]'); ta.value += (ta.value === '' || ta.value.endsWith(' ')) ? '@' : ' @'; ta.dispatchEvent(new Event('input', {bubbles: true}));"
+                  class="w-full text-left px-3 py-2.5 rounded-lg text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all flex items-center gap-2 group"
+                >
+                  <.icon
+                    name="hero-user-plus"
+                    class="w-4 h-4 text-gray-400 group-hover:text-green-500"
+                  />
+                  <span>Tag CRM Contact (@)</span>
+                </button>
+              </div>
+
+              <div
+                id="meeting-selector-list-container"
+                class="hidden absolute bottom-full left-0 mb-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 p-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200 overflow-hidden"
+                phx-click-away={JS.hide(to: "#meeting-selector-list-container")}
+              >
+                <div class="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-50 mb-1">
+                  Recent Meetings
+                </div>
+                <div class="max-h-60 overflow-y-auto space-y-0.5" id="meeting-selector-list">
+                  <%= if Enum.empty?(@user_meetings) do %>
+                    <div class="px-3 py-4 text-center text-xs text-gray-400 italic">
+                      No meetings found
+                    </div>
+                  <% else %>
+                    <%= for meeting <- @user_meetings do %>
+                      <button
+                        type="button"
+                        phx-click={
+                          JS.push("select_meeting", value: %{id: meeting.id})
+                          |> JS.hide(to: "#meeting-selector-list-container")
+                        }
+                        class="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 transition-all group"
+                      >
+                        <div class="text-[13px] font-medium text-gray-700 group-hover:text-blue-700 truncate">
+                          {meeting.title}
+                        </div>
+                        <div class="text-[10px] text-gray-400">
+                          {Calendar.strftime(meeting.recorded_at, "%b %d, %Y")}
+                        </div>
+                      </button>
+                    <% end %>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+
+            <form phx-submit="send_message" class="relative">
+              <div
+                id="chat-input-wrapper"
+                phx-hook="MentionsHandler"
+                data-mentions-open={to_string(@show_mentions and Enum.any?(@contacts))}
+                class="relative"
+              >
+                <div id="chat-textarea-container" phx-update="ignore">
+                  <textarea
+                    id="chat-textarea"
+                    name="message"
+                    class="w-full border-0 p-0 text-sm focus:ring-0 resize-none text-gray-700 placeholder:text-gray-300 min-h-[60px]"
+                    placeholder="Ask anything about your contacts"
+                    autocomplete="off"
+                  ></textarea>
+                </div>
+              </div>
+
+              <div class="flex justify-between items-end mt-2">
+                <div class="flex items-center gap-3">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[11px] text-gray-500 font-medium  tracking-wider">
+                      Sources
+                    </span>
+                    <%= if Enum.empty?(@selected_contacts) do %>
+                      <span class="text-[10px] text-gray-300 px-1.5 py-0.5 italic">
+                        None tagged
+                      </span>
+                    <% end %>
+                    <%= for contact <- @selected_contacts do %>
+                      <button
+                        type="button"
+                        phx-click="remove_contact"
+                        phx-value-id={contact.id}
+                        phx-value-provider={contact.provider}
+                        title={"Remove #{contact.firstname} #{contact.lastname}"}
+                        class="ring-1 ring-white shadow-sm transition-transform hover:scale-110 rounded-full"
+                      >
+                        <.contact_icon contact={contact} class="w-4 h-4 text-[7px]" />
+                      </button>
+                    <% end %>
+                  </div>
+                  
+<!-- Model Selector -->
+                  <div class="relative">
+                    <button
+                      type="button"
+                      phx-click="toggle_model_selector"
+                      class="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200 group"
+                    >
+                      <.icon
+                        name="hero-chevron-up"
+                        class="w-3 h-3 text-gray-500 group-hover:text-gray-600 transition-colors"
+                      />
+                      <span class="text-[11px] text-gray-500 font-medium group-hover:text-gray-600 transition-colors">
+                        {case @selected_model do
+                          "gemini-2.5-flash" -> "Gemini 2.5 Flash"
+                          "gemini-2.5-flash-lite" -> "Gemini 2.5 Flash Lite"
+                          _ -> @selected_model
+                        end}
+                      </span>
+                    </button>
+
+                    <%= if @show_model_selector do %>
+                      <div
+                        class="absolute bottom-full left-0 mb-3 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 p-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200"
+                        phx-click-away="toggle_model_selector"
+                      >
+                        <div class="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] ">
+                          Model
+                        </div>
+                        <div class="space-y-0.5">
+                          <%= for {model, label, badge} <- [
+                                {"gemini-2.5-flash", "Gemini 2.5 Flash", nil},
+                                {"gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", nil}
+                              ] do %>
+                            <button
+                              type="button"
+                              phx-click="select_model"
+                              phx-value-model={model}
+                              class={[
+                                "w-full text-left px-3 py-2.5 rounded-lg text-[13px] transition-all flex items-center justify-between group/item font-normal",
+                                if(@selected_model == model,
+                                  do: "bg-blue-50 text-blue-700",
+                                  else: "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                )
+                              ]}
+                            >
+                              <span>{label}</span>
+                              <%= if badge do %>
+                                <span class="text-[9px] font-black bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded tracking-widest group-hover/item:bg-blue-200 transition-colors">
+                                  {badge}
+                                </span>
+                              <% end %>
+                            </button>
+                          <% end %>
+                        </div>
+                      </div>
+                    <% end %>
+                  </div>
+                </div>
+
+                <div id="submit-btn-container" phx-update="ignore">
+                  <button
+                    type="submit"
+                    id="submit-btn"
+                    disabled
+                    class="flex items-center justify-center h-7 w-7 rounded-lg bg-gray-200 hover:bg-gray-300 hover:text-gray-700 text-gray-500 rounded transition-colors disabled:bg-gray-100 disabled:text-gray-400 disabled:hover:bg-gray-100 disabled:hover:text-gray-400"
+                  >
+                    <.icon name="hero-arrow-up" class="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </form>
+            <!-- Mentions Dropdown -->
+            <%= if @show_mentions do %>
+              <div
+                id="mentions-menu"
+                class="absolute bottom-full left-0 mb-2 w-full bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20 max-h-48 overflow-y-auto"
+                phx-click-away="close_mentions"
+              >
+                <%= if @mention_query == "@" do %>
+                  <div class="p-6 text-center bg-gray-50/30">
+                    <div class="w-8 h-8 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span class="text-xs font-bold">@</span>
+                    </div>
+                    <p class="text-sm font-medium text-gray-700">Tag a CRM contact</p>
+                    <p class="text-[11px] text-gray-400 mt-1">Start typing a name to search...</p>
+                  </div>
+                <% else %>
+                  <%= if Enum.any?(@crm_creds) do %>
+                    <div class="px-3 py-2 bg-gray-50/50 border-b border-gray-100 flex flex-col gap-1.5">
+                      <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Context Search
+                      </div>
+                      <div class="flex flex-wrap gap-x-3 gap-y-1">
+                        <%= for {provider, status} <- @crm_search_status do %>
+                          <div class="flex items-center gap-1.5 min-w-0">
+                            <div class={[
+                              "w-1.5 h-1.5 rounded-full shrink-0",
+                              if(status == :loading,
+                                do: "bg-gray-300 animate-pulse",
+                                else: "bg-green-500"
+                              )
+                            ]}>
+                            </div>
+                            <span class="text-[10px] font-medium text-gray-500 truncate">
+                              {if status == :loading,
+                                do: "Searching #{String.capitalize(provider)}...",
+                                else: "Fetched #{String.capitalize(provider)}"}
+                            </span>
+                          </div>
+                        <% end %>
+                      </div>
+                    </div>
+
+                    <%= if Enum.empty?(@contacts) and Enum.all?(@crm_search_status, fn {_, s} -> s == :done end) do %>
+                      <div class="text-center py-4 text-xs text-gray-400 italic">
+                        No contacts found for "{@mention_query}"
+                      </div>
+                    <% else %>
+                      <%= for {contact, idx} <- Enum.with_index(@contacts) do %>
+                        <button
+                          type="button"
+                          phx-click="select_contact"
+                          phx-value-id={contact.id}
+                          phx-value-provider={contact.provider}
+                          data-name={"#{contact.firstname} #{contact.lastname}"}
+                          data-index={idx}
+                          class={[
+                            "mention-item w-full text-left px-3 py-2 transition-colors flex items-center gap-2 text-sm border-b border-gray-100 last:border-0",
+                            if(@highlighted_index == idx,
+                              do: "bg-gray-100 mention-highlighted",
+                              else: "hover:bg-blue-50"
+                            )
+                          ]}
+                        >
+                          <.contact_icon contact={contact} class="w-4 h-4 text-[7px]" />
+                          <div class="truncate">
+                            <span class="font-medium text-gray-900">
+                              {contact.firstname} {contact.lastname}
+                            </span>
+                            <span class="text-gray-400 ml-1 text-xs">{contact.email}</span>
+                          </div>
+                          <%= if @highlighted_index == idx do %>
+                            <div class="ml-auto text-[10px] text-gray-400 font-medium bg-gray-200 px-1.5 py-0.5 rounded">
+                              Tab
+                            </div>
+                          <% end %>
+                        </button>
+                      <% end %>
+                    <% end %>
+                  <% else %>
+                    <div class="p-6 text-center">
+                      <p class="text-xs text-gray-500 mb-2">No CRMs connected.</p>
+                      <a
+                        href="/settings"
+                        class="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                      >
+                        Connect to Salesforce or HubSpot
+                      </a>
+                    </div>
+                  <% end %>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% else %>
+        <!-- History Tab -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-2">
+          <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            Recent 30 Days
+          </h3>
+          <%= if Enum.empty?(@chat_sessions) do %>
+            <p class="text-sm text-gray-400 italic">No history yet.</p>
+          <% else %>
+            <%= for session <- @chat_sessions do %>
+              <div class={[
+                "w-full flex items-center gap-1 rounded-lg border transition-all group p-1 pr-2",
+                if(@chat_session_id == session.id,
+                  do: "bg-blue-50 border-blue-200",
+                  else: "bg-white border-gray-100 hover:bg-gray-50"
+                )
+              ]}>
+                <button
+                  type="button"
+                  phx-click="load_session"
+                  phx-value-id={session.id}
+                  class="flex-1 text-left p-2 min-w-0"
+                >
+                  <p class={[
+                    "text-sm font-medium mb-1 truncate",
+                    if(@chat_session_id == session.id, do: "text-blue-900", else: "text-gray-700")
+                  ]}>
+                    {session.title || "Untitled Chat"}
+                  </p>
+                  <span class="text-[10px] text-gray-400">
+                    {Calendar.strftime(session.updated_at, "%b %d, %H:%M")}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  phx-click="prompt_delete_chat"
+                  phx-value-id={session.id}
+                  class="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-all shrink-0"
+                  title="Delete Chat"
+                >
+                  <.icon name="hero-trash" class="w-4 h-4" />
+                </button>
+              </div>
+            <% end %>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+    
+<!-- Modal Removed -->
+  </div>
+
+  <%= if Map.get(assigns, :delete_session_id) do %>
+    <.modal
+      id="delete-chat-modal"
+      show
+      on_cancel={JS.push("cancel_delete_chat")}
+      container_class="p-3"
+    >
+      <div class="p-4 sm:p-6 bg-white rounded-lg">
+        <div class="sm:flex sm:items-center">
+          <div class="mx-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+            <.icon name="hero-exclamation-triangle" class="h-6 w-6 text-red-600" />
+          </div>
+          <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+            <h3 class="text-base font-semibold leading-6 text-gray-900" id="modal-title">
+              Delete chat?
+            </h3>
+            <div class="mt-2">
+              <p class="text-sm text-gray-500">
+                Are you sure you want to delete this chat history? This action cannot be undone.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+          <button
+            type="button"
+            phx-click="confirm_delete_chat"
+            class="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 sm:ml-3 sm:w-auto"
+          >
+            Delete
+          </button>
+          <button
+            type="button"
+            phx-click="cancel_delete_chat"
+            class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </.modal>
+  <% end %>
+<% end %>
