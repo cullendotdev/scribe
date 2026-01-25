@@ -6,7 +6,7 @@ defmodule SocialScribe.AIContentGenerator do
   alias SocialScribe.Meetings
   alias SocialScribe.Automations
 
-  @gemini_model "gemini-2.5-flash-lite"
+  @gemini_model "gemini-2.5-flash"
   @gemini_api_base_url "https://generativelanguage.googleapis.com/v1beta/models"
 
   @impl SocialScribe.AIContentGeneratorApi

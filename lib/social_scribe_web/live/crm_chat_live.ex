@@ -75,7 +75,7 @@ defmodule SocialScribeWeb.CrmChatLive do
       accumulated_sources: [],
       show_context_menu: false,
       show_meeting_selector: false,
-      selected_model: "gemini-2.5-flash-lite",
+      selected_model: "gemini-2.5-flash",
       show_model_selector: false,
       form: to_form(%{"message" => ""}),
       crm_search_status: %{},
