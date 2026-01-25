@@ -350,6 +350,7 @@
                       />
                       <span class="text-[11px] text-gray-500 font-medium group-hover:text-gray-600 transition-colors">
                         {case @selected_model do
+                          "gemini-3-flash" -> "Gemini 3 Flash"
                           "gemini-2.5-flash" -> "Gemini 2.5 Flash"
                           "gemini-2.5-flash-lite" -> "Gemini 2.5 Flash Lite"
                           _ -> @selected_model
@@ -367,6 +368,7 @@
                         </div>
                         <div class="space-y-0.5">
                           <%= for {model, label, badge} <- [
+                                {"gemini-3-flash", "Gemini 3 Flash", nil},
                                 {"gemini-2.5-flash", "Gemini 2.5 Flash", nil},
                                 {"gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", nil}
                               ] do %>
@@ -494,7 +496,7 @@
                     <div class="p-6 text-center">
                       <p class="text-xs text-gray-500 mb-2">No CRMs connected.</p>
                       <a
-                        href="/settings"
+                        href="/dashboard/settings"
                         class="text-xs font-semibold text-blue-600 hover:text-blue-700"
                       >
                         Connect to Salesforce or HubSpot
