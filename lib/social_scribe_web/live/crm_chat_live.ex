@@ -578,7 +578,6 @@ defmodule SocialScribeWeb.CrmChatLive do
     }
   end
 
-  defp friendly_model_name("gemini-3-flash"), do: "Gemini 3 Flash"
   defp friendly_model_name("gemini-2.5-flash"), do: "Gemini 2.5 Flash"
   defp friendly_model_name("gemini-2.5-flash-lite"), do: "Gemini 2.5 Flash Lite"
   defp friendly_model_name(model), do: model
