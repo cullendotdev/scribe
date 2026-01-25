@@ -94,3 +94,17 @@
 .markdown-content a:hover {
   color: #1d4ed8; /* text-blue-700 */
 }
+
+/* CRM Chat Sidebar Collapsed State */
+#crm-chat-sidebar-container.collapsed-sidebar {
+  width: 48px !important;
+  min-width: 48px !important;
+}
+
+#crm-chat-sidebar-container.collapsed-sidebar #sidebar-resize-handle {
+  display: none;
+}
+
+#crm-chat-sidebar-container.resizing {
+  transition: none !important;
+}

@@ -212,6 +212,7 @@ Hooks.SidebarResizer = {
     this.startResize = (e) => {
       e.preventDefault();
       this.isResizing = true;
+      this.container.classList.add("resizing");
       document.body.style.userSelect = "none";
       document.body.style.cursor = "col-resize";
       // Keep the handle visible while dragging
@@ -222,7 +223,11 @@ Hooks.SidebarResizer = {
     };
 
     this.doResize = (e) => {
-      if (!this.isResizing) return;
+      if (
+        !this.isResizing ||
+        this.container.classList.contains("collapsed-sidebar")
+      )
+        return;
 
       // Calculate new width (Right Sidebar: Width = Window Width - Mouse X)
       // Clamped between 300 and 800
@@ -235,6 +240,7 @@ Hooks.SidebarResizer = {
 
     this.stopResize = () => {
       this.isResizing = false;
+      this.container.classList.remove("resizing");
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
       this.handle.classList.remove("bg-indigo-500", "opacity-100");

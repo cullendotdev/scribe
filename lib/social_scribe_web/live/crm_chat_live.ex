@@ -75,7 +75,8 @@ defmodule SocialScribeWeb.CrmChatLive do
          crm_search_status: %{},
          search_id: 0,
          highlighted_index: 0,
-         error_alert: nil
+         error_alert: nil,
+         collapsed: false
        )}
     else
       {:ok,
@@ -103,9 +104,14 @@ defmodule SocialScribeWeb.CrmChatLive do
          crm_search_status: %{},
          search_id: 0,
          highlighted_index: 0,
-         error_alert: nil
+         error_alert: nil,
+         collapsed: false
        )}
     end
+  end
+
+  def handle_event("toggle_collapse", _, socket) do
+    {:noreply, assign(socket, collapsed: !socket.assigns.collapsed)}
   end
 
   def handle_event("dismiss_error", _, socket) do
