@@ -39,11 +39,13 @@ config :social_scribe, :gemini_api_key, System.get_env("GEMINI_API_KEY")
 
 config :ueberauth, Ueberauth.Strategy.Hubspot.OAuth,
   client_id: System.get_env("HUBSPOT_CLIENT_ID"),
-  client_secret: System.get_env("HUBSPOT_CLIENT_SECRET")
+  client_secret: System.get_env("HUBSPOT_CLIENT_SECRET"),
+  redirect_uri: System.get_env("HUBSPOT_REDIRECT_URI")
 
 config :ueberauth, Ueberauth.Strategy.Salesforce.OAuth,
   client_id: System.get_env("SALESFORCE_CLIENT_ID"),
-  client_secret: System.get_env("SALESFORCE_CLIENT_SECRET")
+  client_secret: System.get_env("SALESFORCE_CLIENT_SECRET"),
+  redirect_uri: System.get_env("SALESFORCE_REDIRECT_URI")
 
 if System.get_env("PHX_SERVER") do
   config :social_scribe, SocialScribeWeb.Endpoint, server: true
@@ -62,32 +64,35 @@ if config_env() == :prod do
   # Parse DATABASE_URL for Cloud SQL Unix socket connections
   # Format: ecto://user:pass@localhost/db?socket=/cloudsql/project:region:instance
   uri = URI.parse(database_url)
-  socket_dir = if uri.query do
-    uri.query
-    |> URI.decode_query()
-    |> Map.get("socket")
-  end
 
-  repo_config = if socket_dir do
-    # For Cloud SQL socket connections, configure manually (don't use URL with host)
-    [userinfo_user, userinfo_pass] = String.split(uri.userinfo || ":", ":")
-    database = String.trim_leading(uri.path || "", "/")
+  socket_dir =
+    if uri.query do
+      uri.query
+      |> URI.decode_query()
+      |> Map.get("socket")
+    end
 
-    [
-      username: userinfo_user,
-      password: userinfo_pass,
-      database: database,
-      socket_dir: socket_dir,
-      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
-    ]
-  else
-    # Standard TCP connection
-    [
-      url: database_url,
-      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-      socket_options: maybe_ipv6
-    ]
-  end
+  repo_config =
+    if socket_dir do
+      # For Cloud SQL socket connections, configure manually (don't use URL with host)
+      [userinfo_user, userinfo_pass] = String.split(uri.userinfo || ":", ":")
+      database = String.trim_leading(uri.path || "", "/")
+
+      [
+        username: userinfo_user,
+        password: userinfo_pass,
+        database: database,
+        socket_dir: socket_dir,
+        pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
+      ]
+    else
+      # Standard TCP connection
+      [
+        url: database_url,
+        pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+        socket_options: maybe_ipv6
+      ]
+    end
 
   config :social_scribe, SocialScribe.Repo, repo_config
 
