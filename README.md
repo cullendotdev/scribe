@@ -46,36 +46,35 @@ Social Scribe connects your Google Calendar with Recall.ai and Google Gemini to 
     Copy `.env.example` to `.env` and populate the following:
 
     ```bash
+    # General Config
+    PHX_HOST="localhost:4000" # Optional, defaults to localhost:4000 in dev
+
     # Google (Auth & Calendar)
     GOOGLE_CLIENT_ID=...
     GOOGLE_CLIENT_SECRET=...
-    GOOGLE_REDIRECT_URI="http://localhost:4000/auth/google/callback"
 
     # AI & Transcription
     GEMINI_API_KEY=...
     RECALL_API_KEY=...
+    RECALL_REGION=... # Optional, defaults to us-west-2 if not set
 
     # Social Platforms
     # LinkedIn (optional)
     LINKEDIN_CLIENT_ID=...
     LINKEDIN_CLIENT_SECRET=...
-    LINKEDIN_REDIRECT_URI="http://localhost:4000/auth/linkedin/callback"
 
     # Facebook (optional)
     FACEBOOK_APP_ID=...
     FACEBOOK_APP_SECRET=...
-    FACEBOOK_REDIRECT_URI="http://localhost:4000/auth/facebook/callback"
 
     # CRM Integrations
     # HubSpot (optional)
     HUBSPOT_CLIENT_ID=...
     HUBSPOT_CLIENT_SECRET=...
-    HUBSPOT_REDIRECT_URI="http://localhost:4000/auth/hubspot/callback"
 
     # Salesforce (optional)
     SALESFORCE_CLIENT_ID=...
     SALESFORCE_CLIENT_SECRET=...
-    SALESFORCE_REDIRECT_URI="http://localhost:4000/auth/salesforce/callback"
     ```
 
 3.  **Run:**
