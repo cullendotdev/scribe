@@ -318,5 +318,22 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
 
       assert has_element?(view, "#chat-scroller", "Response from Flash")
     end
+
+    test "renders markdown formatted response", %{conn: conn, user: user} do
+      SocialScribe.AIContentGeneratorMock
+      |> expect(:answer_crm_question, fn _msg, _hist, _contacts, _model ->
+        {:ok, "**Bold** and *Italic*"}
+      end)
+
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      view
+      |> form("form[phx-submit=send_message]", %{message: "Format check"})
+      |> render_submit()
+
+      assert has_element?(view, ".markdown-content strong", "Bold")
+      assert has_element?(view, ".markdown-content em", "Italic")
+    end
   end
 end

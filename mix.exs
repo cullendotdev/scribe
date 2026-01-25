@@ -70,6 +70,7 @@ defmodule SocialScribe.MixProject do
       {:gettext, "~> 0.26"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
+      {:earmark, "~> 1.4"},
       {:bandit, "~> 1.5"}
     ]
   end

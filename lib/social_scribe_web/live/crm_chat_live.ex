@@ -620,4 +620,18 @@ defmodule SocialScribeWeb.CrmChatLive do
   end
 
   def contact_full_name(_), do: "Unknown"
+
+  defp markdown(assigns) do
+    # Configure Earmark options for safety and features if needed
+    # using default options for now
+    html = Earmark.as_html!(assigns.content)
+
+    assigns = assign(assigns, :html, html)
+
+    ~H"""
+    <div class="markdown-content">
+      {Phoenix.HTML.raw(@html)}
+    </div>
+    """
+  end
 end
