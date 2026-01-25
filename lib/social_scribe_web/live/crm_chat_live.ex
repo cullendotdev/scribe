@@ -621,10 +621,20 @@ defmodule SocialScribeWeb.CrmChatLive do
 
   def contact_full_name(_), do: "Unknown"
 
+  attr :content, :string, required: true
+  attr :sources, :list, default: []
+
   defp markdown(assigns) do
     # Configure Earmark options for safety and features if needed
-    # using default options for now
     html = Earmark.as_html!(assigns.content)
+
+    # If we have sources, replace contact names with styled chip HTML
+    html =
+      if Enum.any?(assigns.sources) do
+        inject_contact_chips(html, assigns.sources)
+      else
+        html
+      end
 
     assigns = assign(assigns, :html, html)
 
@@ -633,6 +643,33 @@ defmodule SocialScribeWeb.CrmChatLive do
       {Phoenix.HTML.raw(@html)}
     </div>
     """
+  end
+
+  # Injects styled contact chip HTML when contact names are found in the content.
+  # This is a very crude way to do it, but it works (for now).
+  defp inject_contact_chips(html, sources) do
+    # Sort by name length (longest first) to match longer names before shorter ones
+    sorted_sources =
+      sources
+      |> Enum.sort_by(fn contact -> -String.length(contact_full_name(contact)) end)
+
+    Enum.reduce(sorted_sources, html, fn contact, acc ->
+      name = contact_full_name(contact)
+      provider = contact[:provider] || contact["provider"]
+      initials = contact_initials(contact)
+      color = provider_color(provider)
+
+      chip_html =
+        if provider == "google_meet" do
+          ~s(<span class="inline-flex items-center gap-1 bg-gray-100 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle"><span class="w-4 h-4 rounded-full flex items-center justify-center bg-blue-600 shrink-0"><svg class="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></span><span class="text-gray-700 text-sm">#{name}</span></span>)
+        else
+          ~s(<span class="inline-flex items-center gap-1 bg-gray-100 rounded-lg pl-0.5 pr-2 py-0.5 mb-1 align-middle"><span class="w-4 h-4 rounded-full flex items-center justify-center text-[7px] text-white font-bold shrink-0 #{color}">#{initials}</span><span class="text-gray-700 text-sm">#{name}</span></span>)
+        end
+
+      # Replace the name with the chip HTML (case insensitive, but preserve original casing is tricky)
+      # Using a simple string replacement - only replace if not already inside a tag.
+      String.replace(acc, name, chip_html)
+    end)
   end
 
   # Renders message content with @mentions displayed as styled contact chips.

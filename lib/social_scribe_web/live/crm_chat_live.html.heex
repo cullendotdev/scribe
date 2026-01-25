@@ -81,7 +81,7 @@
           <div class="flex flex-col space-y-1 shrink-0">
             <%= if msg.role == :assistant do %>
               <div class="text-sm text-gray-800 leading-relaxed">
-                <.markdown content={msg.content} />
+                <.markdown content={msg.content} sources={Map.get(msg, :sources, [])} />
               </div>
               <%= if Map.get(msg, :sources) && msg.sources != [] do %>
                 <div class="mt-2 flex items-center gap-2 text-xs text-gray-400">
