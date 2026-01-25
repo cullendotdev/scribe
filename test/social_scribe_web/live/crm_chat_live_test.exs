@@ -334,6 +334,41 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
 
       assert has_element?(view, ".markdown-content strong", "Bold")
       assert has_element?(view, ".markdown-content em", "Italic")
+      assert has_element?(view, ".markdown-content em", "Italic")
+    end
+
+    test "deletes chat session from history list", %{conn: conn, user: user} do
+      # Create session
+      {:ok, session} =
+        SocialScribe.Chats.create_chat_session(%{user_id: user.id, title: "To Be Deleted"})
+
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      # Switch to history
+      render_click(view, "toggle_tab", %{"tab" => "history"})
+
+      assert has_element?(view, "button[phx-click=load_session]", "To Be Deleted")
+
+      # Delete session
+      view
+      |> element("button[phx-click=prompt_delete_chat][phx-value-id=#{session.id}]")
+      |> render_click()
+
+      # Check for modal
+      assert has_element?(view, "#delete-chat-modal", "Delete chat?")
+
+      # Confirm delete
+      view
+      |> element("button[phx-click=confirm_delete_chat]")
+      |> render_click()
+
+      refute has_element?(view, "button[phx-click=load_session]", "To Be Deleted")
+
+      # Verify deletion from database
+      assert_raise Ecto.NoResultsError, fn ->
+        SocialScribe.Chats.get_chat_session!(session.id)
+      end
     end
   end
 end

@@ -76,7 +76,8 @@ defmodule SocialScribeWeb.CrmChatLive do
          search_id: 0,
          highlighted_index: 0,
          error_alert: nil,
-         collapsed: false
+         collapsed: false,
+         delete_session_id: nil
        )}
     else
       {:ok,
@@ -105,7 +106,8 @@ defmodule SocialScribeWeb.CrmChatLive do
          search_id: 0,
          highlighted_index: 0,
          error_alert: nil,
-         collapsed: false
+         collapsed: false,
+         delete_session_id: nil
        )}
     end
   end
@@ -128,6 +130,49 @@ defmodule SocialScribeWeb.CrmChatLive do
 
   def handle_event("select_model", %{"model" => model}, socket) do
     {:noreply, assign(socket, selected_model: model, show_model_selector: false)}
+  end
+
+  def handle_event("prompt_delete_chat", %{"id" => id}, socket) do
+    {:noreply, assign(socket, delete_session_id: String.to_integer(id))}
+  end
+
+  def handle_event("cancel_delete_chat", _, socket) do
+    {:noreply, assign(socket, delete_session_id: nil)}
+  end
+
+  def handle_event("confirm_delete_chat", _, socket) do
+    if id = socket.assigns.delete_session_id do
+      session = Chats.get_chat_session!(id)
+
+      if session.user_id == socket.assigns.current_user.id do
+        Chats.delete_chat_session(session)
+
+        # Refresh list
+        sessions = Chats.list_user_chat_sessions(socket.assigns.current_user.id)
+
+        # If we deleted the active session, reset to new chat
+        socket =
+          if socket.assigns.chat_session_id == session.id do
+            assign(socket,
+              chat_session_id: nil,
+              chat_history: [],
+              active_tab: "chat",
+              message: "",
+              selected_contacts: [],
+              accumulated_sources: [],
+              error_alert: nil
+            )
+          else
+            socket
+          end
+
+        {:noreply, assign(socket, chat_sessions: sessions, delete_session_id: nil)}
+      else
+        {:noreply, assign(socket, delete_session_id: nil)}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   # Create a new chat session effectively by clearing out the current session ID
