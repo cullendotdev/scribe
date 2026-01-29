@@ -105,6 +105,35 @@ defmodule SocialScribe.SalesforceApi do
     end)
   end
 
+  @doc """
+  Gets notes associated with a contact.
+  """
+  @impl SocialScribe.CrmApiBehaviour
+  def get_contact_notes(%UserCredential{} = credential, contact_id) do
+    BaseApi.with_token_refresh(credential, fn cred ->
+      instance_url = get_instance_url(cred)
+      client = client(instance_url, cred.token)
+
+      notes_query =
+        "SELECT Id, Title, Body, CreatedDate FROM Note WHERE ParentId = '#{contact_id}' ORDER BY CreatedDate DESC"
+
+      case Tesla.get(client, "/services/data/#{@api_version}/query/", query: [q: notes_query]) do
+        {:ok, %Tesla.Env{status: 200, body: %{"records" => notes}}} ->
+          formatted_notes = Enum.map(notes, &format_note/1)
+
+          {:ok, formatted_notes}
+
+        {:ok, %Tesla.Env{status: status, body: body}} ->
+          Logger.warning("Failed to fetch notes: #{status} - #{inspect(body)}")
+          {:ok, []}
+
+        {:error, reason} ->
+          Logger.error("HTTP error fetching notes: #{inspect(reason)}")
+          {:ok, []}
+      end
+    end)
+  end
+
   defp get_instance_url(credential) do
     # Fallback, though likely wrong if missing
     credential.meta["instance_url"] || "https://login.salesforce.com"
@@ -113,5 +142,14 @@ defmodule SocialScribe.SalesforceApi do
   # Format a Salesforce contact response using the shared ContactFormatter
   defp format_contact(record) do
     ContactFormatter.build_contact("salesforce", record["Id"], record)
+  end
+
+  defp format_note(record) do
+    %{
+      id: record["Id"],
+      title: record["Title"],
+      body: record["Body"],
+      created_at: record["CreatedDate"]
+    }
   end
 end

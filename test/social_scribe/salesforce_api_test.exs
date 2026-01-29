@@ -4,6 +4,7 @@ defmodule SocialScribe.SalesforceApiTest do
   alias SocialScribe.SalesforceApi
   import SocialScribe.AccountsFixtures
   import Tesla.Mock
+  import ExUnit.CaptureLog
 
   # Test constants matching the implementation
   @instance_url "https://na1.salesforce.com"
@@ -268,7 +269,55 @@ defmodule SocialScribe.SalesforceApiTest do
           json(%{"error" => "invalid_grant"}, status: 400)
       end)
 
-      {:error, _reason} = SalesforceApi.apply_updates(credential, "123", updates_list)
+      assert capture_log(fn ->
+               {:error, _reason} = SalesforceApi.apply_updates(credential, "123", updates_list)
+             end) =~ "Failed to refresh salesforce token"
+    end
+  end
+
+  describe "get_contact_notes/2" do
+    test "fetches and formats notes", %{credential: credential} do
+      contact_id = "abc1"
+
+      mock(fn
+        %{method: :get, url: @query_url} = env ->
+          assert env.query[:q] =~ "SELECT Id, Title, Body, CreatedDate FROM Note"
+          assert env.query[:q] =~ "ParentId = '#{contact_id}'"
+
+          json(
+            %{
+              "records" => [
+                %{
+                  "Id" => "note1",
+                  "Title" => "Meeting Notes",
+                  "Body" => "Good meeting.",
+                  "CreatedDate" => "2023-10-27T10:00:00Z"
+                }
+              ]
+            },
+            status: 200
+          )
+      end)
+
+      {:ok, notes} = SalesforceApi.get_contact_notes(credential, contact_id)
+      assert length(notes) == 1
+      note = hd(notes)
+      assert note.id == "note1"
+      assert note.title == "Meeting Notes"
+      assert note.body == "Good meeting."
+    end
+
+    test "handles query errors by returning empty list", %{credential: credential} do
+      mock(fn
+        %{method: :get, url: @query_url} ->
+          json(%{"error" => "invalid"}, status: 400)
+      end)
+
+      # Implementation returns empty list on error
+      assert capture_log(fn ->
+               {:ok, notes} = SalesforceApi.get_contact_notes(credential, "abc1")
+               assert notes == []
+             end) =~ "Failed to fetch notes"
     end
   end
 end

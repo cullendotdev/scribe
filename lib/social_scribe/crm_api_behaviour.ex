@@ -26,6 +26,9 @@ defmodule SocialScribe.CrmApiBehaviour do
             ) ::
               {:ok, map() | :no_updates} | {:error, any()}
 
+  @callback get_contact_notes(credential :: UserCredential.t(), contact_id :: String.t()) ::
+              {:ok, list(map())} | {:error, any()}
+
   @callback display_properties() :: %{
               color: String.t(),
               initial: String.t(),
@@ -46,5 +49,9 @@ defmodule SocialScribe.CrmApiBehaviour do
 
   def apply_updates(%{provider: provider} = credential, contact_id, updates_list) do
     Config.api_impl(provider).apply_updates(credential, contact_id, updates_list)
+  end
+
+  def get_contact_notes(%{provider: provider} = credential, contact_id) do
+    Config.api_impl(provider).get_contact_notes(credential, contact_id)
   end
 end
