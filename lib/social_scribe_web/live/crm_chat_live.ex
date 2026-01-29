@@ -312,6 +312,24 @@ defmodule SocialScribeWeb.CrmChatLive do
     if contact do
       updated_contacts = [contact | socket.assigns.selected_contacts] |> Enum.uniq_by(& &1.id)
 
+      # Start fetching notes asynchronously
+      if provider in Config.crm_provider_names() do
+        credential = get_credential(socket, provider)
+
+        if credential do
+          pid = self()
+
+          Task.start(fn ->
+            api_module = Config.api_impl(provider)
+
+            case api_module.get_contact_notes(credential, id) do
+              {:ok, notes} -> send(pid, {:contact_notes_fetched, provider, id, notes})
+              _ -> :ok
+            end
+          end)
+        end
+      end
+
       {:noreply,
        assign(socket,
          selected_contacts: updated_contacts,
@@ -468,6 +486,20 @@ defmodule SocialScribeWeb.CrmChatLive do
     end
   end
 
+  def handle_info({:contact_notes_fetched, provider, id, notes}, socket) do
+    updated_selected =
+      update_contact_notes(socket.assigns.selected_contacts, provider, id, notes)
+
+    updated_accumulated =
+      update_contact_notes(socket.assigns.accumulated_sources, provider, id, notes)
+
+    {:noreply,
+     assign(socket,
+       selected_contacts: updated_selected,
+       accumulated_sources: updated_accumulated
+     )}
+  end
+
   def handle_info({:search_contacts, query, search_id}, socket) do
     # Only proceed if this matches the latest search request
     if search_id == socket.assigns.search_id do
@@ -581,6 +613,25 @@ defmodule SocialScribeWeb.CrmChatLive do
   defp friendly_model_name("gemini-2.5-flash"), do: "Gemini 2.5 Flash"
   defp friendly_model_name("gemini-2.5-flash-lite"), do: "Gemini 2.5 Flash Lite"
   defp friendly_model_name(model), do: model
+
+  defp get_credential(socket, provider) do
+    Enum.find(socket.assigns.crm_creds, fn c -> c.provider == provider end)
+  end
+
+  defp update_contact_notes(contacts, provider, id, notes) do
+    target_id = to_string(id)
+
+    Enum.map(contacts, fn c ->
+      c_id = to_string(c[:id] || c["id"])
+      c_provider = c[:provider] || c["provider"]
+
+      if c_provider == provider and c_id == target_id do
+        Map.put(c, "notes", notes)
+      else
+        c
+      end
+    end)
+  end
 
   attr :content, :string, required: true
   attr :sources, :list, default: []
