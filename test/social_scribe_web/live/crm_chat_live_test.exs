@@ -4,6 +4,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
   import Phoenix.LiveViewTest
   import SocialScribe.AccountsFixtures
   import Mox
+  import ExUnit.CaptureLog
 
   @endpoint SocialScribeWeb.Endpoint
 
@@ -49,6 +50,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
            }
          ]}
       end)
+      |> stub(:get_contact_notes, fn _creds, _id -> {:ok, []} end)
 
       {:ok, view, _html} =
         live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
@@ -89,6 +91,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
            }
          ]}
       end)
+      |> stub(:get_contact_notes, fn _creds, _id -> {:ok, []} end)
 
       {:ok, view, _html} =
         live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
@@ -214,6 +217,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
            }
          ]}
       end)
+      |> stub(:get_contact_notes, fn _creds, _id -> {:ok, []} end)
 
       {:ok, view, _html} =
         live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
@@ -273,13 +277,14 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
       {:ok, view, _html} =
         live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
 
-      # Submit message
-      view
-      |> form("form[phx-submit=send_message]", %{message: "Hello AI"})
-      |> render_submit()
+      # Submit message and check error alert (async)
+      assert capture_log(fn ->
+               view
+               |> form("form[phx-submit=send_message]", %{message: "Hello AI"})
+               |> render_submit()
 
-      # Check error alert appears (async)
-      assert has_element?(view, "div", "Quota Exceeded")
+               assert has_element?(view, "div", "Quota Exceeded")
+             end) =~ "AI Error"
     end
 
     test "model selector changes AI model for generation", %{conn: conn, user: user} do
@@ -503,6 +508,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
            }
          ]}
       end)
+      |> stub(:get_contact_notes, fn _creds, _id -> {:ok, []} end)
 
       {:ok, view, _html} =
         live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
@@ -629,6 +635,7 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
            }
          ]}
       end)
+      |> stub(:get_contact_notes, fn _creds, _id -> {:ok, []} end)
 
       SocialScribe.AIContentGeneratorMock
       |> expect(:answer_crm_question, fn _msg, _hist, _contacts, _model ->
@@ -658,6 +665,77 @@ defmodule SocialScribeWeb.CrmChatLiveTest do
 
       assert length(sources) == 1
       assert hd(sources)["firstname"] == "John"
+    end
+
+    test "fetches and includes contact notes in AI context", %{conn: conn, user: user} do
+      Mox.set_mox_global(SocialScribe.SalesforceApiMock)
+      test_pid = self()
+
+      {:ok, _} =
+        SocialScribe.Accounts.create_user_credential(%{
+          user_id: user.id,
+          provider: "salesforce",
+          uid: "sf_uid",
+          token: "tok",
+          refresh_token: "ref",
+          expires_at: DateTime.add(DateTime.utc_now(), 3600, :second),
+          email: "user@example.com"
+        })
+
+      # Mock Salesforce API to return notes
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _creds, _query ->
+        {:ok,
+         [
+           %{
+             id: "sf_bob",
+             firstname: "Bob",
+             lastname: "Builder",
+             provider: "salesforce",
+             email: "bob@example.com"
+           }
+         ]}
+      end)
+      |> expect(:get_contact_notes, fn _creds, "sf_bob" ->
+        {:ok, [%{title: "Secret", body: "Bob likes bricks"}]}
+      end)
+
+      # Mock AI to report back what it received
+      SocialScribe.AIContentGeneratorMock
+      |> expect(:answer_crm_question, fn _msg, _hist, contacts, _model ->
+        send(test_pid, {:ai_request_received, contacts})
+        {:ok, "AI Response"}
+      end)
+
+      {:ok, view, _html} =
+        live_isolated(conn, SocialScribeWeb.CrmChatLive, session: %{"user_id" => user.id})
+
+      # 1. Search for contact
+      view
+      |> element("#chat-input-wrapper")
+      |> render_hook("search_contacts_direct", %{"query" => "Bob"})
+
+      # Select Contact (direct hook to avoid race conditions with UI rendering)
+      render_hook(view, "select_contact", %{"id" => "sf_bob", "provider" => "salesforce"})
+
+      # 3. Wait for notes to be loaded (async task)
+      Process.sleep(300)
+
+      # 4. Send message to trigger AI generation
+      view
+      |> form("form[phx-submit=send_message]", %{message: "Analyze Bob"})
+      |> render_submit()
+
+      # 5. Verify the AI received the contact WITH the notes
+      assert_receive {:ai_request_received, contacts}, 1000
+
+      bob = Enum.find(contacts, fn c -> c[:id] == "sf_bob" end)
+      assert bob, "Contact Bob should be in the AI context"
+
+      notes = bob["notes"]
+      assert is_list(notes), "Notes should be a list"
+      assert length(notes) == 1
+      assert hd(notes).body == "Bob likes bricks"
     end
   end
 end
